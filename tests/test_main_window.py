@@ -84,6 +84,9 @@ class _FakeStreamingServer(QtCore.QObject):
     def is_listening(self) -> bool:
         return True
 
+    def read_port(self) -> int:
+        return 45678
+
 
 class _FakeSliceController:
     def __init__(self, _viewer: _FakeViewer, _parent: QtCore.QObject) -> None:
@@ -117,7 +120,7 @@ def test_the_status_beside_the_button_names_the_case(window: main_window_module.
 
 class _FakeRunner:
     def __init__(self) -> None:
-        self.arguments: tuple[str | None, str | None, int, str] | None = None
+        self.arguments: tuple[str | None, str | None, int, str, int | None] | None = None
 
     def start(
         self,
@@ -126,8 +129,9 @@ class _FakeRunner:
         *,
         case_path: str | None = None,
         checkpoint_path: str | None = None,
+        stream_port: int | None = None,
     ) -> str:
-        self.arguments = (case_path, checkpoint_path, num_procs, output_root)
+        self.arguments = (case_path, checkpoint_path, num_procs, output_root, stream_port)
         return "mpiexec -n 4 exaflow run --case case.xml"
 
     def is_running(self) -> bool:
@@ -149,11 +153,12 @@ def test_run_writes_the_case_and_keeps_it_until_process_exit(
     window._run_simulation()
 
     assert runner.arguments is not None
-    case_path, checkpoint_path, num_procs, output_root = runner.arguments
+    case_path, checkpoint_path, num_procs, output_root, stream_port = runner.arguments
     assert case_path is not None
     assert checkpoint_path is None
     assert num_procs == 3
     assert output_root == str(tmp_path / "runs")
+    assert stream_port == 45678
     assert Path(case_path).is_file()
     assert read_case(case_path) == window._gui_case
 

@@ -40,6 +40,7 @@ class SimulationRunner(QtCore.QObject):
         *,
         case_path: str | None = None,
         checkpoint_path: str | None = None,
+        stream_port: int | None = None,
     ) -> str:
         """
         Start a run under `mpiexec` with `num_procs` ranks, and return the command as one line of text. Give `case_path` to start a case from its input XML, `checkpoint_path` to continue the run a checkpoint holds, or both to continue that run under a replacement case. One of the two is required.
@@ -66,6 +67,8 @@ class SimulationRunner(QtCore.QObject):
 
         environment = QtCore.QProcessEnvironment.systemEnvironment()
         environment.insert("EXAFLOW_OUTPUT_ROOT", output_root)
+        if stream_port is not None:
+            environment.insert("EXAFLOW_STREAM_PORT", str(stream_port))
         self._process.setProcessEnvironment(environment)
         self._process.start("mpiexec", launch_arguments)
         return display_command

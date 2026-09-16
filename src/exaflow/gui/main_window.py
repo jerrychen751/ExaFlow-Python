@@ -234,6 +234,7 @@ class MainWindow(QtWidgets.QMainWindow):
             mpi_processes,
             self._output_directory_input.text().strip() or resolve_output_root(),
             case_path=str(case_path),
+            stream_port=self._read_stream_port(),
         )
         self._append_log(f"[{self._format_time()}] Case saved to {case_path}")
         self._append_log(f"[{self._format_time()}] Starting: {display_command}")
@@ -259,8 +260,14 @@ class MainWindow(QtWidgets.QMainWindow):
             int(self._mpi_processes_input.value()),
             self._output_directory_input.text().strip() or resolve_output_root(),
             checkpoint_path=checkpoint_path,
+            stream_port=self._read_stream_port(),
         )
         self._append_log(f"[{self._format_time()}] Starting: {display_command}")
+
+    def _read_stream_port(self) -> int | None:
+        if self._streaming_server is None:
+            return None
+        return self._streaming_server.read_port()
 
     def _stop_simulation(self) -> None:
         if not self._runner.is_running():
@@ -324,6 +331,7 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             self._viewer.load_mesh(dataset)
             self._slice.refresh()
+            self._append_log(f"[{self._format_time()}] Streamed{self._viewer.describe_time_level()}")
         except Exception:
             self._append_log(traceback.format_exc())
 

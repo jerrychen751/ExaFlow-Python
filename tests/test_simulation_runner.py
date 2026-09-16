@@ -52,7 +52,22 @@ def test_source_run_uses_the_standard_cli_command(
     ]
     assert process.environment is not None
     assert process.environment.value("EXAFLOW_OUTPUT_ROOT") == str(tmp_path / "runs")
+    assert not process.environment.contains("EXAFLOW_STREAM_PORT")
     assert "exaflow.cli run --case" in command
+
+
+def test_a_stream_port_reaches_the_run_through_the_environment(
+    tmp_path: Path,
+    qt_application: QtWidgets.QApplication,
+) -> None:
+    runner = SimulationRunner()
+    process = FakeProcess()
+    setattr(runner, "_process", process)
+
+    runner.start(1, str(tmp_path / "runs"), case_path=str(tmp_path / "case.xml"), stream_port=54321)
+
+    assert process.environment is not None
+    assert process.environment.value("EXAFLOW_STREAM_PORT") == "54321"
 
 
 def test_frozen_run_restarts_the_bundle_in_cli_mode(
