@@ -86,6 +86,25 @@ class TotalCsvWriter:
         write_text_atomically(os.path.join(self._directory, f"{label}_Total.csv"), text)
 
 
+def pad_to_three_axes(
+    grid: Grid,
+    components: list[np.ndarray],
+    pressure: np.ndarray,
+) -> tuple[list[np.ndarray], list[np.ndarray], np.ndarray]:
+    axes = [
+        np.linspace(0.0, float(span), int(count))
+        for span, count in zip(grid.extent, grid.shape)
+    ]
+    while len(axes) < 3:
+        axes.append(np.array([0.0], dtype=float))
+    padded = pressure.shape + (1,) * (3 - pressure.ndim)
+    pressure = np.ascontiguousarray(pressure.reshape(padded))  # (*shape,) -> (nx, ny, nz)
+    components = [np.ascontiguousarray(part.reshape(padded)) for part in components]  # (*shape,) -> (nx, ny, nz) each
+    while len(components) < 3:
+        components.append(np.zeros(padded))
+    return axes, components, pressure
+
+
 class VtkWriter:
     """
     One VTK rectilinear grid per label holding the whole domain, named `<label>_Total.vtr`. Rank 0 assembles the blocks and writes; the other ranks take part in the gather and write nothing. Needs pyevtk, which is imported only when a write happens.
@@ -117,19 +136,7 @@ class VtkWriter:
         assembled = gather_domain_fields(self._subdomain, self._comm, state)
         if assembled is None:
             return
-        components, pressure = assembled
-
-        axes = [
-            np.linspace(0.0, float(span), int(count))
-            for span, count in zip(self._grid.extent, self._grid.shape)
-        ]
-        while len(axes) < 3:
-            axes.append(np.array([0.0], dtype=float))
-        padded = pressure.shape + (1,) * (3 - pressure.ndim)
-        pressure = np.ascontiguousarray(pressure.reshape(padded))  # (*shape,) -> (nx, ny, nz)
-        components = [np.ascontiguousarray(part.reshape(padded)) for part in components]  # (*shape,) -> (nx, ny, nz) each
-        while len(components) < 3:
-            components.append(np.zeros(padded))
+        axes, components, pressure = pad_to_three_axes(self._grid, *assembled)
 
         os.makedirs(self._directory, exist_ok=True)
         gridToVTK(
