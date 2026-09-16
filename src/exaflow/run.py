@@ -18,12 +18,13 @@ def run_case(
     comm: Intracomm | None = None,
     *,
     output_directory: str | None = None,
+    stream_port: int | None = None,
 ) -> FlowState:
     """
     Run one typed Case on this rank and return its final local state. Every MPI rank must call this function with the same Case and output directory.
     """
 
-    return SimulationSession(case, comm, output_directory=output_directory).run_until_complete()
+    return SimulationSession(case, comm, output_directory=output_directory, stream_port=stream_port).run_until_complete()
 
 
 def resume_case(
@@ -32,6 +33,7 @@ def resume_case(
     *,
     case: Case | None = None,
     output_directory: str | None = None,
+    stream_port: int | None = None,
 ) -> FlowState:
     """
     Continue the run one checkpoint holds, and return its final local state. The case comes from the checkpoint unless `case` replaces it, which is how a finished run is extended with a larger `num_steps` or a later `end_time`. A replacement case must describe the same grid shape, because the stored arrays fit no other one.
@@ -48,5 +50,11 @@ def resume_case(
             f"for {case.grid.shape}."
         )
 
-    session = SimulationSession(case, comm, output_directory=output_directory, checkpoint_path=checkpoint_path)
+    session = SimulationSession(
+        case,
+        comm,
+        output_directory=output_directory,
+        checkpoint_path=checkpoint_path,
+        stream_port=stream_port,
+    )
     return session.run_until_complete()

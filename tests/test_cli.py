@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import os
+import pickle
+import socket
+import struct
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from typing import Callable
 
@@ -25,6 +29,7 @@ def run_exaflow(tmp_path: Path, build_case: Callable[..., Case]) -> Callable[...
         name: str = "tiny",
         num_procs: int = 1,
         case: Case | None = None,
+        stream_port: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         if case is None:
             case = build_case(
@@ -36,12 +41,16 @@ def run_exaflow(tmp_path: Path, build_case: Callable[..., Case]) -> Callable[...
         command = [sys.executable, "-m", "exaflow.cli", *arguments]
         if num_procs > 1:
             command = ["mpiexec", "-n", str(num_procs), *command]
+        environment = dict(os.environ, EXAFLOW_OUTPUT_ROOT=str(tmp_path / "runs"))
+        environment.pop("EXAFLOW_STREAM_PORT", None)
+        if stream_port is not None:
+            environment["EXAFLOW_STREAM_PORT"] = stream_port
         return subprocess.run(
             command,
             capture_output=True,
             text=True,
             timeout=600,
-            env=dict(os.environ, EXAFLOW_OUTPUT_ROOT=str(tmp_path / "runs")),
+            env=environment,
         )
 
     return run
@@ -136,6 +145,54 @@ def test_a_resume_continues_the_run_a_checkpoint_holds(
     continued = Path(completed.stdout.strip().removeprefix("Wrote "))
     assert (continued / "Resumed_Total.csv").is_file()
     assert (continued / "Final_Total.csv").is_file()
+
+
+@pytest.mark.filterwarnings(
+    "ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning"
+)
+def test_a_stream_port_receives_the_first_and_the_last_state(
+    tmp_path: Path,
+    run_exaflow: Callable[..., subprocess.CompletedProcess[str]],
+) -> None:
+    """
+    The two-step case has no interval, so the run sends exactly the states it writes: the original one and the final one. Each arrives as one length-prefixed pickled grid on its own connection.
+    """
+
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(4)
+    listener.settimeout(120)
+    _, port = listener.getsockname()
+    steps: list[int] = []
+
+    def accept() -> None:
+        for _ in range(2):
+            connection, _ = listener.accept()
+            with connection, connection.makefile("rb") as stream:
+                length = struct.unpack("!Q", stream.read(8))[0]
+                steps.append(int(pickle.loads(stream.read(length)).field_data["StepIndex"][0]))
+
+    thread = threading.Thread(target=accept)
+    thread.start()
+    try:
+        completed = run_exaflow("run", "--case", str(tmp_path / "tiny.xml"), stream_port=str(port))
+    finally:
+        thread.join(120)
+        listener.close()
+
+    assert completed.returncode == 0, completed.stderr[-2000:]
+    assert steps == [0, 2]
+
+
+def test_a_stream_port_that_is_not_a_port_is_refused(
+    tmp_path: Path,
+    run_exaflow: Callable[..., subprocess.CompletedProcess[str]],
+) -> None:
+    completed = run_exaflow("run", "--case", str(tmp_path / "tiny.xml"), stream_port="viewer")
+
+    assert completed.returncode != 0
+    assert "EXAFLOW_STREAM_PORT" in completed.stderr
+    assert not (tmp_path / "runs").exists() or not list((tmp_path / "runs").iterdir())
 
 
 def test_a_command_line_with_no_subcommand_is_refused(

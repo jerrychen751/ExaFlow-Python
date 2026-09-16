@@ -76,6 +76,8 @@ Set `EXAFLOW_OUTPUT_ROOT` to write the run folders somewhere else:
 EXAFLOW_OUTPUT_ROOT=/tmp/exaflow-runs uv run exaflow run --case examples/input_template.xml
 ```
 
+Set `EXAFLOW_STREAM_PORT` to a TCP port on localhost, and rank 0 also sends every state it writes to that port as a pickled PyVista rectilinear grid, one length-prefixed message per connection. The GUI sets it for the runs it starts. A run whose port nobody listens on prints one line per failed send and marches on.
+
 ### 4. Open the GUI
 
 ```bash

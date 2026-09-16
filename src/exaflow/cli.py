@@ -11,6 +11,7 @@ This is the supported way to run a case without writing a driver, and it is what
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -44,6 +45,12 @@ def main(argv: list[str] | None = None) -> int:
     arguments, _ = parser.parse_known_args(argv)
     if arguments.case is None and arguments.resume is None:
         parser.error("run needs --case or --resume.")
+    stream_port_text = os.environ.get("EXAFLOW_STREAM_PORT", "").strip()
+    stream_port = None
+    if stream_port_text:
+        stream_port = int(stream_port_text) if stream_port_text.isdecimal() else 0
+        if not 1 <= stream_port <= 65535:
+            parser.error(f"EXAFLOW_STREAM_PORT must be a port number from 1 to 65535, got {stream_port_text!r}.")
 
     try:
         import mpi4py.MPI as mpi
@@ -57,9 +64,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if arguments.resume is None:
         assert case is not None, "The parser refuses a run that names neither --case nor --resume."
-        run_case(case, comm, output_directory=run_directory)
+        run_case(case, comm, output_directory=run_directory, stream_port=stream_port)
     else:
-        resume_case(arguments.resume, comm, case=case, output_directory=run_directory)
+        resume_case(arguments.resume, comm, case=case, output_directory=run_directory, stream_port=stream_port)
     rank = int(comm.Get_rank()) if comm is not None else 0
     if rank == 0:
         print(f"Wrote {run_directory}", flush=True)
