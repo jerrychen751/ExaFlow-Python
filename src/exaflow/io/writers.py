@@ -164,6 +164,41 @@ class VtkWriter:
         os.replace(partial_path, written)
 
 
+class StreamWriter:
+    def __init__(
+        self,
+        port: int,
+        grid: Grid,
+        subdomain: Subdomain,
+        comm: Intracomm | None,
+        *,
+        frequency: int = -1,
+    ) -> None:
+        self.frequency = frequency
+        self._port = port
+        self._grid = grid
+        self._subdomain = subdomain
+        self._comm = comm
+
+    def write(self, label: str, state: FlowState, level: TimeLevel) -> None:
+        assembled = gather_domain_fields(self._subdomain, self._comm, state)
+        if assembled is None:
+            return
+        axes, components, pressure = pad_to_three_axes(self._grid, *assembled)
+
+        import pyvista as pv
+
+        from ..gui.streaming.client import StreamingClient
+
+        dataset = pv.RectilinearGrid(*axes)
+        dataset.point_data["pressure"] = pressure.ravel(order="F")  # (nx, ny, nz) -> (nx*ny*nz,)
+        dataset.point_data["velocity"] = np.column_stack([part.ravel(order="F") for part in components])  # 3 x (nx, ny, nz) -> (nx*ny*nz, 3)
+        dataset.field_data["TimeValue"] = np.array([level.current_time])
+        dataset.field_data["StepIndex"] = np.array([level.step_index])
+        dataset.field_data["StepSize"] = np.array([level.dt])
+        StreamingClient(port=self._port).send_dataset(dataset)
+
+
 def build_writers(
     directory: str,
     grid: Grid,

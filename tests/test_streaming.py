@@ -21,6 +21,10 @@ from exaflow.gui.streaming.client import StreamingClient
 from exaflow.gui.streaming.serializers import ImageSerializer, PickleSerializer
 from exaflow.gui.streaming.server import StreamingServer
 from exaflow.gui.streaming.transports import TCPSocketTransport
+from exaflow.config import Case
+from exaflow.fields import TimeLevel, allocate_state
+from exaflow.io.writers import StreamWriter
+from exaflow.mpi.subdomain import Subdomain
 
 WAIT_SECONDS = 10.0
 
@@ -204,3 +208,58 @@ def test_a_message_split_across_two_writes_is_reassembled(
         connection.close()
 
     assert received[0] == {"step": 7}
+
+
+@pytest.mark.filterwarnings(
+    "ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning"
+)
+def test_the_stream_writer_sends_the_whole_domain_with_its_level(
+    qt_application: Any,
+    listening_server: Callable[[], tuple[StreamingServer, int, list[Any]]],
+    build_case: Callable[..., Case],
+    build_subdomain: Callable[..., Subdomain],
+) -> None:
+    """
+    The grid that arrives is the one the viewer shows: a rectilinear grid in metres, with the pressure and the velocity as point data and the step and the time as field data, exactly as a `.vtr` file states them.
+    """
+
+    server, port, received = listening_server()
+    case = build_case((4, 3))
+    subdomain = build_subdomain(case.grid)
+    state = allocate_state(subdomain, 1)
+    state.pressure[subdomain.interior] = np.arange(12.0).reshape(4, 3)
+    writer = StreamWriter(port, case.grid, subdomain, None, frequency=2)
+
+    thread = threading.Thread(target=lambda: writer.write("Original", state, TimeLevel(4, 0.5, 0.125)))
+    thread.start()
+    try:
+        assert spin_until(qt_application, lambda: bool(received)), "the server received nothing"
+    finally:
+        thread.join(WAIT_SECONDS)
+
+    grid = received[0]
+    assert isinstance(grid, pv.RectilinearGrid)
+    assert grid.dimensions == (4, 3, 1)
+    assert grid.bounds == (0.0, 1.0, 0.0, 1.0, 0.0, 0.0)
+    assert np.asarray(grid.point_data["pressure"]).reshape(3, 4).T.tolist() == np.arange(12.0).reshape(4, 3).tolist()
+    assert np.asarray(grid.point_data["velocity"]).shape == (12, 3)
+    assert int(grid.field_data["StepIndex"][0]) == 4
+    assert float(grid.field_data["TimeValue"][0]) == 0.5
+    assert writer.frequency == 2
+
+
+@pytest.mark.filterwarnings(
+    "ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning"
+)
+def test_the_stream_writer_marches_on_when_no_viewer_listens(
+    build_case: Callable[..., Case],
+    build_subdomain: Callable[..., Subdomain],
+) -> None:
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    _, port = listener.getsockname()
+    listener.close()
+    case = build_case((4,))
+    subdomain = build_subdomain(case.grid)
+
+    StreamWriter(port, case.grid, subdomain, None).write("Original", allocate_state(subdomain, 1), TimeLevel(0, 0.0, 0.1))
