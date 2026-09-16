@@ -58,6 +58,16 @@ def test_explicit_writers_replace_the_standard_set(tmp_path: Path, moving_case: 
     assert len(session.writers) == 1
 
 
+def test_a_stream_port_adds_a_stream_writer_at_the_whole_domain_interval(moving_case: Case) -> None:
+    from exaflow.io.writers import StreamWriter
+
+    case = replace(moving_case, outputs=OutputControl(total_frequency=3))
+    session = SimulationSession(case, writers=(), stream_port=12345)
+
+    assert [type(writer) for writer in session.writers] == [StreamWriter]
+    assert session.writers[0].frequency == 3
+
+
 def test_the_position_starts_at_zero_and_moves_with_every_step(moving_case: Case) -> None:
     session = SimulationSession(moving_case)
     assert (session.step_index, session.current_time) == (0, 0.0)

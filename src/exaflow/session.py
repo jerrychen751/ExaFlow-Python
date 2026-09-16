@@ -10,7 +10,7 @@ from .config.case import Case
 from .config.case_xml import write_case
 from .fields import FlowState, TimeLevel, build_initial_state
 from .io.checkpoint import Checkpoint, scatter_checkpoint, write_checkpoint
-from .io.writers import Writer, build_writers, gather_domain_fields
+from .io.writers import StreamWriter, Writer, build_writers, gather_domain_fields
 from .mpi.process_grid import ProcessGrid, choose_process_grid
 from .mpi.subdomain import Subdomain
 from .numerics.operators import SpatialOperator
@@ -37,6 +37,7 @@ class SimulationSession:
         output_directory: str | None = None,
         writers: Sequence[Writer] | None = None,
         checkpoint_path: str | None = None,
+        stream_port: int | None = None,
     ) -> None:
         self.case = case
         self.comm = comm
@@ -53,6 +54,10 @@ class SimulationSession:
             self.writers = build_writers(output_directory, case.grid, self.subdomain, comm, case.outputs)
         else:
             self.writers = ()
+        if stream_port is not None:
+            self.writers += (
+                StreamWriter(stream_port, case.grid, self.subdomain, comm, frequency=case.outputs.total_frequency),
+            )
         if case.outputs.checkpoint_frequency != -1 and output_directory is None:
             raise ValueError("A case with a checkpoint interval needs an output directory to write into.")
         self._case_xml = write_case(case) if output_directory is not None else ""
