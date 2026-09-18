@@ -55,6 +55,7 @@ class PyVistaViewer(QtWidgets.QFrame):
         self._scalar_range: Any = None
         self._held_scalar_ranges: dict[str, tuple[int, float, float]] = {}
         self._is_index_space: bool = False
+        self._is_showing_flat_dataset: bool = False
 
         # Toggles and settings
         self._show_coordinate_axes: bool = True
@@ -263,6 +264,9 @@ class PyVistaViewer(QtWidgets.QFrame):
         flat_axis = self._find_flat_axis()
         if flat_axis is not None:
             self._face_plane(flat_axis)
+        elif self._is_showing_flat_dataset and not self._show_slice_plane:
+            self.view_iso()
+        self._is_showing_flat_dataset = flat_axis is not None
         self._plotter.render()
 
 
