@@ -157,7 +157,7 @@ class SimulationParametersDialog(QtWidgets.QDialog):
         self._double_fields["rho"] = self._create_double_input(minimum=1e-9, maximum=1e6, decimals=6)
         form.addRow("Density (rho)", self._double_fields["rho"])
 
-        self._double_fields["nu"] = self._create_double_input(minimum=0.0, maximum=1.0, decimals=8, single_step=1e-6)
+        self._double_fields["nu"] = self._create_double_input(minimum=0.0, maximum=1e6, decimals=8, single_step=1e-6)
         form.addRow("Kinematic viscosity (nu)", self._double_fields["nu"])
 
         self._int_fields["domain_nx"] = self._create_int_input(2, 10000)
