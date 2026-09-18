@@ -161,8 +161,10 @@ class SimulationParametersDialog(QtWidgets.QDialog):
         form.addRow("Kinematic viscosity (nu)", self._double_fields["nu"])
 
         self._int_fields["domain_nx"] = self._create_int_input(2, 10000)
-        self._int_fields["domain_ny"] = self._create_int_input(2, 10000)
-        self._int_fields["domain_nz"] = self._create_int_input(2, 10000)
+        self._int_fields["domain_ny"] = self._create_int_input(0, 10000)
+        self._int_fields["domain_nz"] = self._create_int_input(0, 10000)
+        for axis in ("ny", "nz"):
+            self._int_fields[f"domain_{axis}"].setToolTip("0 leaves this axis out, so ny = nz = 0 is a 1D case and nz = 0 is a 2D case.")
         form.addRow("Domain (nx, ny, nz)", self._merge_triplet(self._int_fields["domain_nx"], self._int_fields["domain_ny"], self._int_fields["domain_nz"]))
 
         self._double_fields["size_length"] = self._create_double_input(1e-6, 1e6, 3, 0.1)
@@ -338,8 +340,8 @@ class SimulationParametersDialog(QtWidgets.QDialog):
         self._double_fields["nu"].setValue(case.fluid.nu)
 
         for index, axis in enumerate(("nx", "ny", "nz")):
-            self._int_fields[f"domain_{axis}"].setValue(case.grid.shape[index])
-        for index, name in enumerate(("size_length", "size_width", "size_height")):
+            self._int_fields[f"domain_{axis}"].setValue(case.grid.shape[index] if index < case.dimension else 0)
+        for index, name in enumerate(("size_length", "size_width", "size_height")[: case.dimension]):
             self._double_fields[name].setValue(case.grid.extent[index])
 
         self._int_fields["nt"].setValue(case.time.num_steps)
@@ -377,13 +379,18 @@ class SimulationParametersDialog(QtWidgets.QDialog):
         The case the form now describes. Raises ValueError or NotImplementedError when the form describes a case the solver rejects, so the caller reports the fault here instead of writing an XML file that fails at run time.
         """
 
+        counts = [self._int_fields[f"domain_{axis}"].value() for axis in ("nx", "ny", "nz")]
+        if counts[1] == 0 and counts[2] > 0:
+            raise ValueError(f"ny = 0 leaves the y axis out, so nz must be 0 as well, got nz = {counts[2]}. A 2D case uses nx and ny.")
+        dimension = sum(1 for count in counts if count > 0)
+
         faces = {}
         for face in Face:
             widgets = self._boundary_fields[face.name.lower()]
             kind = parse_boundary_condition(widgets.wall.text().strip() or BoundaryCondition.NO_SLIP.value)
             velocity: tuple[float, ...] = ()
             if kind == BoundaryCondition.INFLOW:
-                velocity = tuple(widgets.inflow[name].value() for name in ("u", "v", "w"))
+                velocity = tuple(widgets.inflow[name].value() for name in ("u", "v", "w")[:dimension])
             pressure = widgets.outflow["p"].value() if kind == BoundaryCondition.OUTFLOW else 0.0
             faces[face.name.lower()] = FaceCondition(kind=kind, velocity=velocity, pressure=pressure)
 
@@ -399,8 +406,8 @@ class SimulationParametersDialog(QtWidgets.QDialog):
                 nu=self._double_fields["nu"].value(),
             ),
             grid=Grid(
-                shape=tuple(self._int_fields[f"domain_{axis}"].value() for axis in ("nx", "ny", "nz")),
-                extent=tuple(self._double_fields[name].value() for name in ("size_length", "size_width", "size_height")),
+                shape=tuple(counts[:dimension]),
+                extent=tuple(self._double_fields[name].value() for name in ("size_length", "size_width", "size_height")[:dimension]),
                 num_ghost_layers=self._int_fields["num_ghost_layers"].value(),
             ),
             time=TimeControl(
@@ -411,7 +418,7 @@ class SimulationParametersDialog(QtWidgets.QDialog):
                 adaptive_time_step=self._bool_fields["adaptive_time_step"].isChecked(),
             ),
             boundaries=Boundaries(**faces),
-            initial=parse_initial_conditions(initial_element, 3),
+            initial=parse_initial_conditions(initial_element, dimension),
             solver=SolverOptions(
                 include_convection=self._bool_fields["include_convection"].isChecked(),
                 include_diffusion=self._bool_fields["include_diffusion"].isChecked(),

@@ -318,7 +318,7 @@ uv run pytest tests/test_numerics.py
 
 The first line runs everything. The second leaves out the launcher and the visualization stack, the third keeps only the runs that start `mpiexec`, and the fourth runs one module.
 
-327 tests run in about five seconds. One test module covers one source module. `tests/conftest.py` holds what they share: `build_case` and `build_subdomain` build a case and one rank's block, `template_case_path` gives the absolute path of `examples/input_template.xml`, and `run_under_mpiexec` starts a helper script at a given rank count.
+374 tests run in about five seconds. One test module covers one source module. `tests/conftest.py` holds what they share: `build_case` and `build_subdomain` build a case and one rank's block, `template_case_path` gives the absolute path of `examples/input_template.xml`, and `run_under_mpiexec` starts a helper script at a given rank count.
 
 Three markers select a subset:
 
@@ -395,7 +395,7 @@ Two details keep MPI working inside the bundle:
 - MPI domain decomposition and ghost exchange, verified rank-count independent
 - All boundary condition types (except time-dependent)
 - CSV and VTK output, one format per run folder
-- 327 tests, and `uv run mypy src tests` reporting no issues
+- 374 tests, and `uv run mypy src tests` reporting no issues
 
 **In progress:**
 - Pressure projection (Poisson solver for incompressibility)
