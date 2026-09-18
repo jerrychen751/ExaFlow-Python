@@ -348,6 +348,9 @@ class PyVistaViewer(QtWidgets.QFrame):
         if self._simulation_data is None:
             return
         if self._show_cube_axes:
+            bounds = self._simulation_data.bounds
+            spans = [bounds[2 * axis + 1] - bounds[2 * axis] for axis in range(3)]
+            label_counts = [2 if span < 0.25 * max(spans) else 5 for span in spans]
             if self._cube_axes is None:
                 # Show cube axes with white labels
                 self._plotter.show_bounds(  # type: ignore[call-arg]
@@ -358,6 +361,10 @@ class PyVistaViewer(QtWidgets.QFrame):
                     show_yaxis=True,
                     show_zaxis=True,
                     grid=False,
+                    fmt="%.4g",
+                    n_xlabels=label_counts[0],
+                    n_ylabels=label_counts[1],
+                    n_zlabels=label_counts[2],
                 )
                 self._cube_axes = True
             else:
@@ -371,6 +378,10 @@ class PyVistaViewer(QtWidgets.QFrame):
                     show_yaxis=True,
                     show_zaxis=True,
                     grid=False,
+                    fmt="%.4g",
+                    n_xlabels=label_counts[0],
+                    n_ylabels=label_counts[1],
+                    n_zlabels=label_counts[2],
                 )
                 self._cube_axes = True
         else:
