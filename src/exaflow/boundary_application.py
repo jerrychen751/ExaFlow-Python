@@ -42,7 +42,7 @@ def update_boundaries(state: FlowState, case: Case, subdomain: Subdomain) -> Non
     """
     Refresh the zero-gradient half of each boundary condition in the ghost layers of every global domain face this rank owns. Call once per stage, after the ghost exchange completes.
 
-    A wall or inflow face fixes velocity and lets pressure float, so pressure is copied outward from the first real layer. An outflow face fixes pressure and lets velocity float, so the velocity components are copied instead.
+    A wall or inflow face fixes velocity and lets pressure float, so pressure is copied outward from the first real layer. A slip wall fixes only the velocity component normal to it, so the tangential components are copied outward as well. An outflow face fixes pressure and lets velocity float, so the velocity components are copied instead.
 
     The source span is kept one element wide so that assigning it into a ghost region of depth `pad` broadcasts over the whole depth.
     """
@@ -57,8 +57,13 @@ def update_boundaries(state: FlowState, case: Case, subdomain: Subdomain) -> Non
         edge = _select(face, edge_span, case.dimension)
 
         match condition.kind:
-            case BoundaryCondition.NO_SLIP | BoundaryCondition.SLIP | BoundaryCondition.INFLOW:
+            case BoundaryCondition.NO_SLIP | BoundaryCondition.INFLOW:
                 state.pressure[ghost] = state.pressure[edge]
+            case BoundaryCondition.SLIP:
+                state.pressure[ghost] = state.pressure[edge]
+                for axis in range(case.dimension):
+                    if axis != face.axis:
+                        state.velocity[axis][ghost] = state.velocity[axis][edge]
             case BoundaryCondition.OUTFLOW:
                 for axis in range(case.dimension):
                     state.velocity[axis][ghost] = state.velocity[axis][edge]

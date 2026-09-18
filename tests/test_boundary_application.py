@@ -175,6 +175,25 @@ def test_an_outflow_face_copies_the_velocity_outward(
     assert state.velocity[0][-1, 1] == 25.0
 
 
+def test_a_slip_face_copies_the_tangential_velocity_outward_and_keeps_the_normal_one_stopped(
+    build_case: Callable[..., Case],
+    build_subdomain: Callable[..., Subdomain],
+) -> None:
+    case = build_case((6, 5), boundaries=isolate(FaceCondition(BoundaryCondition.SLIP)))
+    subdomain = build_subdomain(case.grid)
+    state = allocate_state(subdomain, case.dimension)
+    initialize_boundaries(state, case, subdomain)
+    for axis in range(2):
+        state.velocity[axis][subdomain.interior] = np.arange(1.0, 31.0).reshape(6, 5)  # (30,) -> (6, 5)
+
+    update_boundaries(state, case, subdomain)
+
+    transverse = subdomain.interior[1]
+    assert np.all(state.velocity[1][0, transverse] == state.velocity[1][1, transverse])
+    assert state.velocity[1][0, 1] == 1.0
+    assert np.all(state.velocity[0][0, transverse] == 0.0)
+
+
 def test_the_outward_copy_reaches_every_ghost_layer(
     build_case: Callable[..., Case],
     build_subdomain: Callable[..., Subdomain],
