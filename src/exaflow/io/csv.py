@@ -43,7 +43,7 @@ def write_text_atomically(path: str, contents: str) -> None:
 
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     partial_path = f"{path}.partial"
-    with open(partial_path, "w", encoding="utf-8") as handle:
+    with open(partial_path, "w", encoding="utf-8", newline="") as handle:
         handle.write(contents)
         handle.flush()
         os.fsync(handle.fileno())

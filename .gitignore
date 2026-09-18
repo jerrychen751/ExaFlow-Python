@@ -25,5 +25,5 @@ packaging/ExaFlow.icns
 /in/
 
 # Simulations
-/simulations/*
-!/simulations/create_simulation_directories.py
+/Simulations/*
+!/Simulations/create_simulation_directories.py

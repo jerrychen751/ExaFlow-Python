@@ -316,7 +316,7 @@ source = { editable = "." }
 dependencies = [
     { name = "mpi4py" },
     { name = "numpy" },
-    { name = "openmpi" },
+    { name = "openmpi", marker = "sys_platform != 'win32'" },
     { name = "pillow" },
     { name = "pyevtk" },
     { name = "pyside6" },
@@ -339,7 +339,7 @@ dev = [
 requires-dist = [
     { name = "mpi4py" },
     { name = "numpy" },
-    { name = "openmpi" },
+    { name = "openmpi", marker = "sys_platform != 'win32'" },
     { name = "pillow" },
     { name = "pyevtk" },
     { name = "pyside6" },

@@ -20,7 +20,15 @@ The project uses [uv](https://docs.astral.sh/uv/). One command builds the whole 
 uv sync
 ```
 
-This creates `.venv`, installs Python 3.13 (the version in `.python-version`), installs every dependency, and installs ExaFlow itself in editable mode. Nothing else is needed. Open MPI arrives as a Python wheel, so you do not install MPI through Homebrew or conda. `uv.lock` pins every exact version.
+This creates `.venv`, installs Python 3.13 (the version in `.python-version`), installs every dependency, and installs ExaFlow itself in editable mode. On macOS and Linux nothing else is needed. Open MPI arrives as a Python wheel, so you do not install MPI through Homebrew or conda. `uv.lock` pins every exact version.
+
+Open MPI has no Windows build, so on Windows `uv sync` leaves it out and you install Microsoft MPI once, before the first run:
+
+```powershell
+winget install Microsoft.msmpi
+```
+
+Open a new terminal afterwards, because the installer puts `mpiexec` on PATH and sets `MSMPI_BIN`, which is where `mpi4py` looks for the library. The commands in this README are written for a Unix shell. In PowerShell, set an environment variable on its own line first, as in `$env:EXAFLOW_OUTPUT_ROOT = "C:\exaflow-runs"`, in place of the `NAME=value` prefix, and use a Windows path in place of `/tmp`.
 
 Run any command in that environment with `uv run`:
 
@@ -366,7 +374,7 @@ A refactor that should not change the numbers gives byte-identical files. Run it
 
 ## The desktop app
 
-`scripts/update_app.py` builds a standalone `ExaFlow.app` that runs without this repository, without Python and without a separate MPI installation, and installs it as `/Applications/ExaFlow.app`:
+`scripts/update_app.py` builds a standalone `ExaFlow.app` that runs without this repository, without Python and without a separate MPI installation, and installs it as `/Applications/ExaFlow.app`. The build runs on macOS only, because it uses `ditto` and `codesign`; on Windows and Linux, start the GUI from the repository as in the Quick start:
 
 ```bash
 uv run python scripts/update_app.py
