@@ -193,6 +193,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self._vector_stride_spinbox.valueChanged.connect(lambda n: self._viewer.set_vector_stride(int(n)))
         toolbar.addWidget(self._vector_stride_spinbox)
 
+        toolbar.addWidget(QtWidgets.QLabel("Color by"))
+        self._scalar_input = QtWidgets.QComboBox()
+        self._scalar_input.addItems(["speed", "pressure"])
+        self._scalar_input.currentTextChanged.connect(self._viewer.set_scalar_name)
+        toolbar.addWidget(self._scalar_input)
+
         toolbar.addStretch(1)
 
         # Camera preset buttons
@@ -236,6 +242,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
 
         self._log_output.clear()
+        self._viewer.clear_held_scalar_ranges()
         self._run_button.setEnabled(False)
         self._resume_button.setEnabled(False)
         display_command = self._runner.start(
@@ -262,6 +269,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
 
         self._log_output.clear()
+        self._viewer.clear_held_scalar_ranges()
         self._run_button.setEnabled(False)
         self._resume_button.setEnabled(False)
         display_command = self._runner.start(

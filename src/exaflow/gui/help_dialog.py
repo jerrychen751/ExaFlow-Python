@@ -192,9 +192,9 @@ class HelpDialog(QtWidgets.QDialog):
         <h3>Color Mapping:</h3>
         <ul>
         <li>Uses "coolwarm" colormap (blue to red)</li>
-        <li>Scalar bar shows data range and units</li>
+        <li>Scalar bar shows the data range, rounded outward, and holds it through the frames of one run</li>
         <li>Automatic formatting for scientific notation</li>
-        <li>Pressure field typically displayed by default</li>
+        <li>"Color by" picks the field: speed, the magnitude of the velocity, is the default, and pressure is the other</li>
         </ul>
         """)
         
@@ -237,7 +237,8 @@ class HelpDialog(QtWidgets.QDialog):
         
         <h3>Data Fields:</h3>
         <ul>
-        <li><b>Pressure:</b> Scalar field displayed as color mapping</li>
+        <li><b>Speed:</b> Magnitude of the velocity, displayed as color mapping by default</li>
+        <li><b>Pressure:</b> Scalar field, displayed as color mapping when "Color by" selects it</li>
         <li><b>Velocity:</b> Vector field displayed as arrows</li>
         <li><b>Coordinates:</b> Spatial position (X, Y, Z)</li>
         <li><b>Custom fields:</b> Additional data arrays if present</li>

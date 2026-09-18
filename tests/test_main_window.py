@@ -31,6 +31,12 @@ class _FakeViewer(QtWidgets.QWidget):
     def set_vector_stride(self, _value: int) -> None:
         return None
 
+    def set_scalar_name(self, _name: str) -> None:
+        return None
+
+    def clear_held_scalar_ranges(self) -> None:
+        self.held_scalar_range_clears = getattr(self, "held_scalar_range_clears", 0) + 1
+
     def view_pos_x(self) -> None:
         return None
 
@@ -177,6 +183,7 @@ def test_run_writes_the_case_and_keeps_it_until_process_exit(
     assert stream_port == 45678
     assert Path(case_path).is_file()
     assert read_case(case_path) == window._gui_case
+    assert getattr(window._viewer, "held_scalar_range_clears") == 1
 
     window._handle_process_finished(0, "NormalExit")
 

@@ -51,7 +51,9 @@ class PyVistaViewer(QtWidgets.QFrame):
         self._slice_plane_actor: Any = None
         self._slice_plane_mesh: Any = None
         self._scalar_name: Optional[str] = None
+        self._preferred_scalar_name: str = "speed"
         self._scalar_range: Any = None
+        self._held_scalar_ranges: dict[str, tuple[int, float, float]] = {}
         self._is_index_space: bool = False
 
         # Toggles and settings
@@ -76,6 +78,8 @@ class PyVistaViewer(QtWidgets.QFrame):
         if self._main_mesh_actor is not None:
             self._plotter.remove_actor(self._main_mesh_actor)
             self._main_mesh_actor = None
+        for title in list(self._plotter.scalar_bars.keys()):
+            self._plotter.remove_scalar_bar(title)
 
         # Remove outline
         if self._domain_outline_actor is not None:
@@ -144,9 +148,14 @@ class PyVistaViewer(QtWidgets.QFrame):
     def _load_mesh(self, mesh: pv.DataSet) -> None:
         self._simulation_data = mesh
 
+        if "velocity" in mesh.point_data and "speed" not in mesh.point_data:
+            mesh.point_data["speed"] = np.linalg.norm(mesh.point_data["velocity"], axis=1)
+
         # Choose scalar if available
         scalar_name: Optional[str] = None
-        if mesh.point_data and mesh.active_scalars_name:
+        if self._preferred_scalar_name in mesh.point_data:
+            scalar_name = self._preferred_scalar_name
+        elif mesh.point_data and mesh.active_scalars_name:
             scalar_name = mesh.active_scalars_name
         elif "pressure" in mesh.point_data:
             scalar_name = "pressure"
@@ -159,9 +168,24 @@ class PyVistaViewer(QtWidgets.QFrame):
         self._scalar_range = None
         if scalar_name is not None:
             low, high = (float(bound) for bound in mesh.get_data_range(scalar_name, "point"))
+            step = mesh.field_data["StepIndex"] if "StepIndex" in mesh.field_data else None
+            held = self._held_scalar_ranges.get(scalar_name)
+            if step is not None and held is not None:
+                if int(step[0]) >= held[0]:
+                    low, high = min(low, held[1]), max(high, held[2])
+                else:
+                    self._held_scalar_ranges.clear()
             if high - low <= abs(high) * 1e-12:
                 padding = abs(high) * 0.05 if high != 0.0 else 1.0
                 low, high = high - padding, high + padding
+                self._held_scalar_ranges.pop(scalar_name, None)
+            else:
+                tick = 10.0 ** math.floor(math.log10(high - low)) / 5.0
+                low, high = round(math.floor(low / tick) * tick, 12), round(math.ceil(high / tick) * tick, 12)
+                if step is None:
+                    self._held_scalar_ranges.pop(scalar_name, None)
+                else:
+                    self._held_scalar_ranges[scalar_name] = (int(step[0]), low, high)
             self._scalar_range = (low, high)
             max_magnitude = max(abs(low), abs(high))
             if max_magnitude >= 1e4 or (0 < max_magnitude <= 1e-3):
@@ -460,6 +484,14 @@ class PyVistaViewer(QtWidgets.QFrame):
         self._show_cube_axes = show
         self._update_cube_axes()
         self._plotter.render()
+
+    def set_scalar_name(self, name: str) -> None:
+        self._preferred_scalar_name = name
+        if self._simulation_data is not None:
+            self.load_mesh(self._simulation_data, is_index_space=self._is_index_space)
+
+    def clear_held_scalar_ranges(self) -> None:
+        self._held_scalar_ranges.clear()
 
     def set_show_vectors(self, show: bool) -> None:
         self._show_velocity_vectors = show
