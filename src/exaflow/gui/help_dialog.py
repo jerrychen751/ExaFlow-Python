@@ -80,7 +80,7 @@ class HelpDialog(QtWidgets.QDialog):
         
         <h3>Getting Started:</h3>
         <ol>
-        <li>Open "Simulation Params..." and review the case</li>
+        <li>Pick a case in "Preset", or open "Simulation Params..." and review the case</li>
         <li>Set the number of MPI processes (default: 4)</li>
         <li>Choose the output root</li>
         <li>Click "Run" to start <code>exaflow run</code> through MPI, or "Resume..." to continue from a checkpoint</li>
@@ -104,6 +104,7 @@ class HelpDialog(QtWidgets.QDialog):
         <h3>Case Configuration:</h3>
         <ul>
         <li><b>Simulation Params...:</b> Edit the typed case that the run receives</li>
+        <li><b>Preset:</b> Load one of the shipped cases; an edit in "Simulation Params..." sets it back to Custom</li>
         <li><b>MPI processes:</b> Number of parallel processes (1-512, default: 4)</li>
         <li><b>Output root:</b> Directory that receives one result directory per run</li>
         </ul>

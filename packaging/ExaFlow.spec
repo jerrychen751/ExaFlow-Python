@@ -27,6 +27,7 @@ mpi_extension_paths = [
 if not mpi_extension_paths:
     raise FileNotFoundError(f"No MPI.*.so in {os.path.dirname(mpi4py.__file__)}. Nothing else puts the mpi4py extension in the bundle, and the app cannot import MPI without it.")
 datas += [(path, "mpi4py") for path in mpi_extension_paths]
+datas += [(path, "exaflow/gui/presets") for path in glob.glob(os.path.join(repo_root, "src", "exaflow", "gui", "presets", "*.xml"))]
 
 analysis = Analysis(
     [os.path.join(SPECPATH, "entry.py")],

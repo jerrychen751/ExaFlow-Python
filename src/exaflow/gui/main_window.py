@@ -4,13 +4,14 @@ import os
 import tempfile
 import traceback
 from datetime import datetime
+from importlib.resources import files
 from pathlib import Path
 
 import pyvista as pv
 from PySide6 import QtCore, QtWidgets
 
 from ..config import Case
-from ..config.case_xml import write_case
+from ..config.case_xml import read_case, write_case
 from ..io.storage import resolve_output_root
 from .help_dialog import HelpDialog
 from .result_watcher import LatestResultWatcher
@@ -92,6 +93,13 @@ class MainWindow(QtWidgets.QMainWindow):
         params_row.addWidget(self._params_button)
         params_row.addWidget(self._params_status, 1)
         form.addRow("Case", params_row)
+
+        self._preset_input = QtWidgets.QComboBox(controls)
+        self._preset_input.addItem("Custom")
+        for preset_path in sorted(Path(str(files("exaflow.gui").joinpath("presets"))).glob("*.xml")):
+            self._preset_input.addItem(preset_path.stem.replace("_", " ").title(), str(preset_path))
+        self._preset_input.activated.connect(self._load_preset)
+        form.addRow("Preset", self._preset_input)
 
         # MPI processes
         self._mpi_processes_input = QtWidgets.QSpinBox(controls)
@@ -346,7 +354,16 @@ class MainWindow(QtWidgets.QMainWindow):
         dialog = SimulationParametersDialog(self, self._gui_case)
         if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
             self._gui_case = dialog.read_case()
+            self._preset_input.setCurrentIndex(0)
             self._refresh_case_status()
+
+    def _load_preset(self, index: int) -> None:
+        preset_path = self._preset_input.itemData(index)
+        if preset_path is None:
+            return
+        self._gui_case = read_case(preset_path)
+        self._refresh_case_status()
+        self._append_log(f"[{self._format_time()}] Loaded preset: {self._preset_input.itemText(index)}")
 
     def _refresh_case_status(self) -> None:
         shape = "x".join(str(count) for count in self._gui_case.grid.shape)

@@ -118,6 +118,22 @@ def test_the_status_beside_the_button_names_the_case(window: main_window_module.
     assert window._params_status.text() == "100x100x50, VTK"
 
 
+def test_every_preset_loads_into_the_case_and_custom_keeps_it(window: main_window_module.MainWindow) -> None:
+    labels = [window._preset_input.itemText(index) for index in range(window._preset_input.count())]
+    assert labels == ["Custom", "Channel Inflow 3D", "Moving Block 3D", "Moving Patch 2D"]
+
+    for index in range(1, window._preset_input.count()):
+        window._preset_input.setCurrentIndex(index)
+        window._preset_input.activated.emit(index)
+        assert window._gui_case == read_case(window._preset_input.itemData(index))
+        assert labels[index] in window._log_output.toPlainText()
+    assert window._params_status.text() == "360x240, VTK"
+
+    window._preset_input.setCurrentIndex(0)
+    window._preset_input.activated.emit(0)
+    assert window._params_status.text() == "360x240, VTK"
+
+
 class _FakeRunner:
     def __init__(self) -> None:
         self.arguments: tuple[str | None, str | None, int, str, int | None] | None = None

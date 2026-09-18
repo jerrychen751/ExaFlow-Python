@@ -84,7 +84,7 @@ Set `EXAFLOW_STREAM_PORT` to a TCP port on localhost, and rank 0 also sends ever
 uv run python run_gui.py
 ```
 
-The window has a control column on the left and a 3D viewer on the right. Edit the case, set the number of MPI processes, and press Run. The GUI starts the standard `exaflow run --case` command through `mpiexec`, with `EXAFLOW_STREAM_PORT` set to the port its server listens on, so rank 0 sends every state it writes straight to the viewer over TCP on localhost. The viewer shows the newest state it has received and skips any that arrived while it was still drawing an earlier one, so a run that outpaces the display never queues up behind it. The viewer also loads the newest result file from the output root, which is how a run started outside the GUI appears. The case a new window opens on writes VTK, which carries the physical extent the slice control reports in metres; the Output & Misc tab switches it to CSV.
+The window has a control column on the left and a 3D viewer on the right. Pick a case in the **Preset** box or edit one through **Simulation Params…**, set the number of MPI processes, and press Run. The GUI starts the standard `exaflow run --case` command through `mpiexec`, with `EXAFLOW_STREAM_PORT` set to the port its server listens on, so rank 0 sends every state it writes straight to the viewer over TCP on localhost. The viewer shows the newest state it has received and skips any that arrived while it was still drawing an earlier one, so a run that outpaces the display never queues up behind it. The viewer also loads the newest result file from the output root, which is how a run started outside the GUI appears. The case a new window opens on writes VTK, which carries the physical extent the slice control reports in metres; the Output & Misc tab switches it to CSV.
 
 The **Slice** row cuts a 3D result on one axis and shows that plane by itself. Pick the axis, move the position slider, and the camera faces the plane and stops rotating. The position label states the unit: metres for a `.vtr` file, and cells for a CSV file, which carries the indices and no physical extent. A 1D or 2D result is already a cross-section, so the viewer shows it flat and the control stays disabled.
 
@@ -130,6 +130,7 @@ src/exaflow/
         slice_controller.py # the cross-section row and the viewer state behind it
         viewer.py # PyVista 3D view
         sim_parameters_dialog.py # edits one Case and returns it
+        presets/ # the case files the Preset box lists
         streaming/ # sends fields from a running job to the viewer
 examples/ # the typed Python API example and the input XML template
 Simulations/ # scaffold script for a new simulation directory
@@ -258,6 +259,22 @@ A `Case` is frozen, so it can be built once and compared. It holds no communicat
 Build the session yourself to stop between steps. It holds `state`, `step_index`, `current_time` and `dt`, `advance_one_step` moves all four, `is_complete` reports whether the run has reached its target, and `save_checkpoint` writes a file another process can continue from.
 
 `create_run_directory` is a collective call. Rank 0 picks the folder name and broadcasts it, so every rank has to call it. A call on rank 0 alone makes the other ranks wait forever.
+
+### Presets
+
+`src/exaflow/gui/presets/` holds three case files. The **Preset** box in the GUI lists every `.xml` in that folder, so a new file there appears in the list with no code change. The folder ships inside the package and inside `ExaFlow.app`.
+
+- `moving_patch_2d.xml` puts a rectangular patch of fast fluid in a slower periodic 2D flow and marches 6 s. The patch steepens into a sharp front on its leading side, stretches into a ramp behind, and crosses the periodic faces more than once.
+- `moving_block_3d.xml` is the same setup in a periodic 3D box, marched 2 s, with a block that moves along x alone. The block sits in the corner the default camera faces, because the viewer draws the outer surface of a 3D result. Use **Slice** to look inside.
+- `channel_inflow_3d.xml` marches 6 s of flow through a channel with an inflow face, an outflow face and four no-slip walls. The channel starts with a swirl, and the inflow enters at an angle, so once the swirl has washed out the flow leans toward two walls and leaves slow fluid along the other two.
+
+On four processes the 2D case takes about 10 seconds in the GUI and each 3D case about 16, and each streams 40 to 50 frames to the viewer. Every frame is also a `.vtr` file, so one run writes 130 to 360 MB under the output root.
+
+The same file runs from the command line:
+
+```bash
+uv run mpiexec -n 4 exaflow run --case src/exaflow/gui/presets/channel_inflow_3d.xml
+```
 
 ### As a new simulation directory
 
