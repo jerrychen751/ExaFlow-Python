@@ -4,7 +4,7 @@ import os
 import math
 import traceback
 from PySide6 import QtCore, QtWidgets
-from typing import Optional, Any
+from typing import Optional, Any, cast
 
 import pyvista as pv
 from pyvistaqt import QtInteractor  # type: ignore
@@ -115,7 +115,7 @@ class PyVistaViewer(QtWidgets.QFrame):
 
     def load_vtr(self, path: str) -> None:
         abspath = os.path.abspath(path)
-        mesh = pv.read(abspath)
+        mesh = cast(pv.DataSet, pv.read(abspath))
         self.load_mesh(mesh)
 
     def load_csv(self, path: str) -> None:

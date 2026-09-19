@@ -14,6 +14,7 @@ import argparse
 import os
 import sys
 from pathlib import Path
+from typing import cast
 
 from .config.case_xml import read_case
 from .io.storage import create_run_directory
@@ -59,7 +60,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         comm = mpi.COMM_WORLD
     case = read_case(arguments.case) if arguments.case is not None else None
-    label = arguments.label or Path(arguments.resume or arguments.case).stem
+    label = arguments.label or Path(cast(str, arguments.resume or arguments.case)).stem
     run_directory = create_run_directory(label, comm)
 
     if arguments.resume is None:
