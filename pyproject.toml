@@ -15,15 +15,12 @@ dependencies = [
     "pyvistaqt",
     "vtk",
     "Pillow",
-]
-
-[dependency-groups]
-dev = [
     "mypy",
     "pytest",
     "pyside6-stubs",
     "scipy-stubs",
     "pyinstaller",
+    "ipykernel",
 ]
 
 [tool.pytest.ini_options]

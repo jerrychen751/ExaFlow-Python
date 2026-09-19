@@ -306,7 +306,7 @@ The editable install means an edit under `src/` takes effect on the next run. Yo
 uv add <package>
 ```
 
-This writes the package into `pyproject.toml`, resolves it into `uv.lock`, and installs it. The project keeps one flat dependency list with no optional extras, and a `dev` group for mypy, pytest, the stubs and PyInstaller, which `uv sync` installs by default. Add a development tool with `uv add --dev <package>`.
+This writes the package into `pyproject.toml`, resolves it into `uv.lock`, and installs it. The project keeps one flat dependency list with no optional extras and no dependency groups, so mypy, pytest, the stubs, PyInstaller and ipykernel sit in the same list as the runtime packages.
 
 ### Check types
 
