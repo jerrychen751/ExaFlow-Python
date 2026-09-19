@@ -25,7 +25,7 @@ class SettingsDialog(QtWidgets.QDialog):
         form = QtWidgets.QFormLayout()
         layout.addLayout(form)
 
-        self._autoload_checkbox = QtWidgets.QCheckBox("Auto-load newest .vtr or *_Total.csv")
+        self._autoload_checkbox = QtWidgets.QCheckBox("Auto-load newest checkpoint")
         self._autoload_checkbox.setChecked(self._initial_settings.autoload_enabled)
         form.addRow("Auto-load", self._autoload_checkbox)
 
@@ -54,4 +54,3 @@ class SettingsDialog(QtWidgets.QDialog):
             autoload_enabled=self._autoload_checkbox.isChecked(),
             autoload_interval_ms=int(self._autoload_interval_spin.value()),
         )
-

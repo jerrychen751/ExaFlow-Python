@@ -30,52 +30,44 @@ class TimeControl:
             raise ValueError(f"end_time must be finite and > 0, got {self.end_time}.")
 
 
-class OutputFormat(str, Enum):
+class CheckpointFormat(str, Enum):
     """
-    The file format a run writes. Values are kept as strings to preserve readable serialization (e.g., XML).
+    The file format used for restart checkpoints. Values stay strings so case XML remains readable.
     """
 
     CSV = "CSV"
     VTK = "VTK"
 
 
-def parse_output_format(value: str) -> OutputFormat:
+def parse_checkpoint_format(value: str) -> CheckpointFormat:
     """
-    Parse an output format from a string. This is intentionally strict: an unknown value raises a ValueError rather than silently accepting the string.
+    Parse a checkpoint format from a string. An unknown value raises instead of silently selecting another format.
     """
 
     try:
-        return OutputFormat(value)
+        return CheckpointFormat(value)
     except ValueError as exc:
-        allowed = ", ".join(fmt.value for fmt in OutputFormat)
-        raise ValueError(f"Unknown output format {value!r}. Allowed: {allowed}.") from exc
+        allowed = ", ".join(fmt.value for fmt in CheckpointFormat)
+        raise ValueError(f"Unknown checkpoint format {value!r}. Allowed: {allowed}.") from exc
 
 
 @dataclass(frozen=True, slots=True)
 class OutputControl:
     """
-    Which format a run writes, and how often, counted in time steps. One run writes one format, so a run folder holds .vtr files or .csv files and never both.
+    How often a run streams intermediate states and saves restart checkpoints, counted in completed time steps.
 
-    `total_frequency` is the interval of the file that holds the whole domain, and `partial_frequency` the interval of the per-rank files. Only CSV has a per-rank file, so VTK rejects a `partial_frequency` other than -1 rather than accept a value it would drop. A frequency of -1 asks for no writes during the march; it does not turn the format off, because the session writes the first and last state through every writer whatever its interval. Zero and negative values other than -1 are rejected, because a modulo against them cannot decide a step.
-
-    `checkpoint_frequency` is the interval of the restart file, which belongs to no format and is written beside the field files of either. A frequency of -1 asks for no checkpoint at all, not even a final one.
+    `checkpoint_format` selects readable CSV or binary VTK for restart files. `stream_frequency` is the interval sent to a connected viewer; -1 sends the starting and final states without intermediate states. `checkpoint_frequency` is the interval between restart files; -1 writes no checkpoint, including at the end.
     """
 
-    format: OutputFormat = OutputFormat.CSV
-    total_frequency: int = -1
-    partial_frequency: int = -1
+    checkpoint_format: CheckpointFormat = CheckpointFormat.CSV
+    stream_frequency: int = -1
     checkpoint_frequency: int = -1
 
     def __post_init__(self) -> None:
-        for name in ("total_frequency", "partial_frequency", "checkpoint_frequency"):
+        for name in ("stream_frequency", "checkpoint_frequency"):
             frequency = getattr(self, name)
             if frequency != -1 and frequency < 1:
                 raise ValueError(f"{name} must be -1 or >= 1, got {frequency}.")
-        if self.format is not OutputFormat.CSV and self.partial_frequency != -1:
-            raise ValueError(
-                f"{self.format.value} writes no per-rank file, so partial_frequency must be -1, "
-                f"got {self.partial_frequency}."
-            )
 
     def is_due(self, frequency: int, step: int) -> bool:
         """

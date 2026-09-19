@@ -14,7 +14,7 @@ from ..config import Case
 from ..config.case_xml import read_case, write_case
 from ..io.storage import resolve_output_root
 from .help_dialog import HelpDialog
-from .result_watcher import LatestResultWatcher
+from .result_watcher import LatestCheckpointWatcher
 from .settings_dialog import SessionSettings, SettingsDialog
 from .sim_parameters_dialog import SimulationParametersDialog, build_default_case
 from .simulation_runner import SimulationRunner
@@ -31,7 +31,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Process used to run simulations
         # Register handlers so that the main window can react to a child process
         self._runner = SimulationRunner(self)
-        self._runner.output.connect(self._append_log)
+        self._runner.output.connect(self._handle_process_output)
         self._runner.finished.connect(self._handle_process_finished)
         self._runner.failed.connect(self._handle_process_failed)
 
@@ -39,12 +39,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self._gui_case: Case = build_default_case()
         self._run_case_directory: tempfile.TemporaryDirectory[str] | None = None # a scratch directory holds XML case
         self._session_settings = SessionSettings()
+        self._discard_run_events = False
+        self._accept_streamed_results = True
 
         # UI
         self._build_ui()
 
         # Directory watcher
-        self._watcher = LatestResultWatcher(self._session_settings.autoload_interval_ms, self)
+        self._watcher = LatestCheckpointWatcher(self._session_settings.autoload_interval_ms, self)
         self._watcher.found.connect(self._load_file_path)
         self._refresh_watcher()
 
@@ -130,6 +132,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._resume_button.clicked.connect(self._resume_simulation)
         self._stop_button = QtWidgets.QPushButton("Stop", controls)
         self._stop_button.clicked.connect(self._stop_simulation)
+        self._clear_button = QtWidgets.QPushButton("Clear", controls)
+        self._clear_button.clicked.connect(self._clear_simulation)
         self._open_file_button = QtWidgets.QPushButton("Open File…", controls)
         self._open_file_button.clicked.connect(self._open_file)
         self._help_button = QtWidgets.QPushButton("?", controls)
@@ -143,6 +147,7 @@ class MainWindow(QtWidgets.QMainWindow):
         run_controls_row.addWidget(self._run_button)
         run_controls_row.addWidget(self._resume_button)
         run_controls_row.addWidget(self._stop_button)
+        run_controls_row.addWidget(self._clear_button)
         run_controls_row.addWidget(self._open_file_button)
         run_controls_row.addWidget(self._help_button)
         run_controls_row.addWidget(self._settings_button)
@@ -230,6 +235,14 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addWidget(splitter)
 
     # ------------------------- Process handling -------------------------
+    def _prepare_simulation_start(self) -> None:
+        self._discard_run_events = False
+        self._accept_streamed_results = True
+        self._log_output.clear()
+        self._viewer.clear_held_scalar_ranges()
+        self._run_button.setEnabled(False)
+        self._resume_button.setEnabled(False)
+
     def _run_simulation(self) -> None:
         mpi_processes = int(self._mpi_processes_input.value())
         self._clear_run_case_directory()
@@ -242,10 +255,7 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.critical(self, "Failed to write the case", str(exc))
             return
 
-        self._log_output.clear()
-        self._viewer.clear_held_scalar_ranges()
-        self._run_button.setEnabled(False)
-        self._resume_button.setEnabled(False)
+        self._prepare_simulation_start()
         display_command = self._runner.start(
             mpi_processes,
             self._output_directory_input.text().strip() or resolve_output_root(),
@@ -264,15 +274,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self,
             "Resume from a checkpoint",
             self._output_directory_input.text().strip() or os.getcwd(),
-            "ExaFlow checkpoint (Checkpoint_*.npz);;All files (*)",
+            "ExaFlow checkpoint (Checkpoint_*.csv Checkpoint_*.vtr);;All files (*)",
         )
         if not checkpoint_path:
             return
 
-        self._log_output.clear()
-        self._viewer.clear_held_scalar_ranges()
-        self._run_button.setEnabled(False)
-        self._resume_button.setEnabled(False)
+        self._prepare_simulation_start()
         display_command = self._runner.start(
             int(self._mpi_processes_input.value()),
             self._output_directory_input.text().strip() or resolve_output_root(),
@@ -292,25 +299,50 @@ class MainWindow(QtWidgets.QMainWindow):
         self._append_log(f"[{self._format_time()}] Stopping…")
         self._runner.stop()
 
+    def _clear_simulation(self) -> None:
+        was_running = self._runner.is_running()
+        self._discard_run_events = was_running
+        self._accept_streamed_results = False
+        if was_running:
+            self._runner.stop()
+        else:
+            self._clear_run_case_directory()
+            self._run_button.setEnabled(True)
+            self._resume_button.setEnabled(True)
+        self._viewer.clear()
+        self._viewer.clear_held_scalar_ranges()
+        self._slice.refresh()
+        self._log_output.clear()
+
+    def _handle_process_output(self, text: str) -> None:
+        if not self._discard_run_events:
+            self._append_log(text)
+
     def _handle_process_finished(self, code: int, status: str) -> None:
+        discard = self._discard_run_events
+        self._discard_run_events = False
         self._clear_run_case_directory()
         self._run_button.setEnabled(True)
         self._resume_button.setEnabled(True)
-        self._append_log(f"[{self._format_time()}] Finished with code {code} ({status})")
+        if not discard:
+            self._append_log(f"[{self._format_time()}] Finished with code {code} ({status})")
 
     def _handle_process_failed(self, message: str) -> None:
+        discard = self._discard_run_events
+        self._discard_run_events = False
         self._clear_run_case_directory()
         self._run_button.setEnabled(True)
         self._resume_button.setEnabled(True)
-        QtWidgets.QMessageBox.critical(self, "Failed to start", message)
+        if not discard:
+            QtWidgets.QMessageBox.critical(self, "Failed to start", message)
 
     # ------------------------- File operations -------------------------
     def _open_file(self) -> None:
         file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
             self,
-            "Open result file",
+            "Open checkpoint",
             self._output_directory_input.text().strip() or os.getcwd(),
-            "VTK rectilinear (*.vtr);;CSV totals (*_Total.csv);;All files (*)",
+            "ExaFlow checkpoint (Checkpoint_*.csv Checkpoint_*.vtr);;All files (*)",
         )
         if not file_path:
             return
@@ -328,7 +360,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if file_path.lower().endswith(".vtr"):
                 self._viewer.load_vtr(file_path)
                 self._append_log(f"[{self._format_time()}] Loaded VTR: {file_path}{self._viewer.describe_time_level()}")
-            elif file_path.lower().endswith("_total.csv"):
+            elif file_path.lower().endswith(".csv"):
                 self._viewer.load_csv(file_path)
                 self._append_log(f"[{self._format_time()}] Loaded CSV: {file_path}{self._viewer.describe_time_level()}")
             else:
@@ -343,7 +375,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # ------------------------- Network operations -------------------------
     def _handle_streaming_dataset(self, dataset: pv.DataSet) -> None:
-        # A live stream replaces the newest file on disk, so the watcher stops competing with it.
+        if not self._accept_streamed_results:
+            return
+        # A live stream replaces the newest checkpoint on disk, so the watcher stops competing with it.
         self._watcher.set_enabled(False)
         try:
             self._viewer.load_mesh(dataset)
@@ -376,7 +410,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _refresh_case_status(self) -> None:
         shape = "x".join(str(count) for count in self._gui_case.grid.shape)
-        self._params_status.setText(f"{shape}, {self._gui_case.outputs.format.value}")
+        self._params_status.setText(f"{shape}, {self._gui_case.outputs.checkpoint_format.value}")
 
     def _clear_run_case_directory(self) -> None:
         if self._run_case_directory is None:

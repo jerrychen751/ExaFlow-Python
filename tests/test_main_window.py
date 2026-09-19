@@ -16,6 +16,9 @@ pytestmark = pytest.mark.gui
 class _FakeViewer(QtWidgets.QWidget):
     render_failed = QtCore.Signal(str)
 
+    def clear(self) -> None:
+        self.clear_calls = getattr(self, "clear_calls", 0) + 1
+
     def set_show_axes(self, _value: bool) -> None:
         return None
 
@@ -96,13 +99,13 @@ class _FakeStreamingServer(QtCore.QObject):
 
 class _FakeSliceController:
     def __init__(self, _viewer: _FakeViewer, _parent: QtCore.QObject) -> None:
-        return None
+        self.refresh_calls = 0
 
     def build_toolbar(self) -> QtWidgets.QHBoxLayout:
         return QtWidgets.QHBoxLayout()
 
     def refresh(self) -> None:
-        return None
+        self.refresh_calls += 1
 
 
 @pytest.fixture
@@ -111,7 +114,7 @@ def window(
     qt_application: QtWidgets.QApplication,
 ) -> Iterator[main_window_module.MainWindow]:
     monkeypatch.setattr(main_window_module, "PyVistaViewer", _FakeViewer)
-    monkeypatch.setattr(main_window_module, "LatestResultWatcher", _FakeWatcher)
+    monkeypatch.setattr(main_window_module, "LatestCheckpointWatcher", _FakeWatcher)
     monkeypatch.setattr(main_window_module, "StreamingServer", _FakeStreamingServer)
     monkeypatch.setattr(main_window_module, "SliceController", _FakeSliceController)
     result = main_window_module.MainWindow()
@@ -143,6 +146,8 @@ def test_every_preset_loads_into_the_case_and_custom_keeps_it(window: main_windo
 class _FakeRunner:
     def __init__(self) -> None:
         self.arguments: tuple[str | None, str | None, int, str, int | None] | None = None
+        self.running = False
+        self.stop_calls = 0
 
     def start(
         self,
@@ -154,13 +159,15 @@ class _FakeRunner:
         stream_port: int | None = None,
     ) -> str:
         self.arguments = (case_path, checkpoint_path, num_procs, output_root, stream_port)
+        self.running = True
         return "mpiexec -n 4 exaflow run --case case.xml"
 
     def is_running(self) -> bool:
-        return False
+        return self.running
 
     def stop(self) -> None:
-        return None
+        self.stop_calls += 1
+        self.running = False
 
 
 def test_run_writes_the_case_and_keeps_it_until_process_exit(
@@ -188,3 +195,35 @@ def test_run_writes_the_case_and_keeps_it_until_process_exit(
     window._handle_process_finished(0, "NormalExit")
 
     assert not Path(case_path).exists()
+
+
+def test_clear_stops_the_run_and_resets_the_view_without_changing_the_case(
+    window: main_window_module.MainWindow,
+) -> None:
+    runner = _FakeRunner()
+    runner.running = True
+    setattr(window, "_runner", runner)
+    selected_case = window._gui_case
+    window._run_button.setEnabled(False)
+    window._resume_button.setEnabled(False)
+    window._log_output.setPlainText("old output")
+
+    window._clear_button.click()
+
+    assert runner.stop_calls == 1
+    assert getattr(window._viewer, "clear_calls") == 1
+    assert getattr(window._viewer, "held_scalar_range_clears") == 1
+    assert getattr(window._slice, "refresh_calls") == 1
+    assert window._log_output.toPlainText() == ""
+    assert window._gui_case is selected_case
+    assert not window._accept_streamed_results
+    assert not window._run_button.isEnabled()
+    assert not window._resume_button.isEnabled()
+
+    window._handle_process_output("late output")
+    window._handle_streaming_dataset(main_window_module.pv.ImageData())
+    window._handle_process_finished(1, "CrashExit")
+
+    assert window._log_output.toPlainText() == ""
+    assert window._run_button.isEnabled()
+    assert window._resume_button.isEnabled()

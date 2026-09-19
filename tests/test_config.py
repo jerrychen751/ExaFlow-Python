@@ -10,13 +10,13 @@ from exaflow.config import (
     Boundaries,
     BoundaryCondition,
     Case,
+    CheckpointFormat,
     Face,
     FaceCondition,
     Fluid,
     Grid,
     InitialConditions,
     OutputControl,
-    OutputFormat,
     SolverOptions,
     StepValue,
     TimeControl,
@@ -115,33 +115,29 @@ def test_output_control_rejects_a_zero_checkpoint_interval() -> None:
 
 def test_output_control_rejects_a_zero_interval() -> None:
     with pytest.raises(ValueError, match="must be -1 or >= 1"):
-        OutputControl(total_frequency=0)
+        OutputControl(stream_frequency=0)
 
 
-def test_a_vtk_run_refuses_a_per_rank_interval() -> None:
-    """
-    VTK has one whole-domain file and no per-rank file, so an interval for one would be dropped without a word.
-    """
-
-    with pytest.raises(ValueError, match="partial_frequency must be -1"):
-        OutputControl(format=OutputFormat.VTK, partial_frequency=5)
+def test_output_control_selects_the_checkpoint_format() -> None:
+    assert OutputControl(checkpoint_format=CheckpointFormat.VTK).checkpoint_format is CheckpointFormat.VTK
 
 
 def test_output_control_selects_the_right_steps() -> None:
-    outputs = OutputControl(total_frequency=10)
-    assert outputs.is_due(outputs.total_frequency, 0)
-    assert outputs.is_due(outputs.total_frequency, 20)
-    assert not outputs.is_due(outputs.total_frequency, 15)
-    assert not outputs.is_due(outputs.partial_frequency, 0)
+    outputs = OutputControl(stream_frequency=10, checkpoint_frequency=25)
+    assert outputs.is_due(outputs.stream_frequency, 0)
+    assert outputs.is_due(outputs.stream_frequency, 20)
+    assert not outputs.is_due(outputs.stream_frequency, 15)
+    assert outputs.is_due(outputs.checkpoint_frequency, 50)
 
 
 def test_an_interval_of_minus_one_is_due_at_no_step() -> None:
     """
-    -1 means no write during the march. The solver still writes the first and last state through every writer, so a writer that is never due is not a writer that is off.
+    -1 selects no intermediate stream and no checkpoint.
     """
 
     outputs = OutputControl()
-    assert not any(outputs.is_due(outputs.total_frequency, step) for step in range(50))
+    assert not any(outputs.is_due(outputs.stream_frequency, step) for step in range(50))
+    assert not any(outputs.is_due(outputs.checkpoint_frequency, step) for step in range(50))
 
 
 def test_periodic_faces_must_be_paired() -> None:

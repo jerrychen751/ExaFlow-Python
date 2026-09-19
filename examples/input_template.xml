@@ -179,9 +179,8 @@
       <IncludePressureEffects>False</IncludePressureEffects>
     </SolverProperties>
     <OutputProperties>
-      <Format>CSV</Format>
-      <WriteTotalFrequency>100</WriteTotalFrequency>
-      <WritePartialFrequency>250</WritePartialFrequency>
-      <WriteCheckpointFrequency>-1</WriteCheckpointFrequency>
+      <CheckpointFormat>CSV</CheckpointFormat>
+      <StreamFrequency>100</StreamFrequency>
+      <CheckpointFrequency>100</CheckpointFrequency>
     </OutputProperties>
   </Simulation>

@@ -10,16 +10,16 @@ from ..config import (
     Boundaries,
     BoundaryCondition,
     Case,
+    CheckpointFormat,
     Face,
     FaceCondition,
     Fluid,
     Grid,
     OutputControl,
-    OutputFormat,
     SolverOptions,
     TimeControl,
     parse_boundary_condition,
-    parse_output_format,
+    parse_checkpoint_format,
 )
 from ..config.case_xml import parse_initial_conditions, write_initial_conditions
 
@@ -88,7 +88,7 @@ def build_default_case() -> Case:
             right=FaceCondition(BoundaryCondition.OUTFLOW, pressure=0.0),
         ),
         initial=parse_initial_conditions(ET.fromstring(DEFAULT_INITIAL_CONDITIONS_XML), 3),
-        outputs=OutputControl(format=OutputFormat.VTK, total_frequency=100),
+        outputs=OutputControl(checkpoint_format=CheckpointFormat.VTK, stream_frequency=100),
     )
 
 
@@ -263,30 +263,16 @@ class SimulationParametersDialog(QtWidgets.QDialog):
         widget = QtWidgets.QWidget()
         form = QtWidgets.QFormLayout(widget)
 
-        self._combo_fields["output_format"] = self._create_scheme_combo([fmt.value for fmt in OutputFormat])
-        self._combo_fields["output_format"].currentTextChanged.connect(self._apply_output_format)
-        form.addRow("Output format", self._combo_fields["output_format"])
+        self._combo_fields["checkpoint_format"] = self._create_scheme_combo([fmt.value for fmt in CheckpointFormat])
+        form.addRow("Checkpoint format", self._combo_fields["checkpoint_format"])
 
-        self._int_fields["total_frequency"] = self._create_int_input(-1, 1_000_000)
-        form.addRow("Total frequency", self._int_fields["total_frequency"])
-
-        self._int_fields["partial_frequency"] = self._create_int_input(-1, 1_000_000)
-        form.addRow("Partial frequency", self._int_fields["partial_frequency"])
+        self._int_fields["stream_frequency"] = self._create_int_input(-1, 1_000_000)
+        form.addRow("Stream frequency", self._int_fields["stream_frequency"])
 
         self._int_fields["checkpoint_frequency"] = self._create_int_input(-1, 1_000_000)
         form.addRow("Checkpoint frequency", self._int_fields["checkpoint_frequency"])
 
         return widget
-
-    def _apply_output_format(self, name: str) -> None:
-        """
-        Match the partial interval to the format the combo now shows. Only CSV writes a per-rank file, so VTK sets that interval to -1 and disables the field.
-        """
-
-        writes_per_rank = parse_output_format(name) is OutputFormat.CSV
-        self._int_fields["partial_frequency"].setEnabled(writes_per_rank)
-        if not writes_per_rank:
-            self._int_fields["partial_frequency"].setValue(-1)
 
     # ------------------------ Helpers ------------------------ #
     def _create_double_input(
@@ -357,11 +343,9 @@ class SimulationParametersDialog(QtWidgets.QDialog):
         self._bool_fields["include_pressure"].setChecked(case.solver.include_pressure)
         self._int_fields["time_integration_order"].setValue(case.time.integration_order)
 
-        self._combo_fields["output_format"].setCurrentText(case.outputs.format.value)
-        self._int_fields["total_frequency"].setValue(case.outputs.total_frequency)
-        self._int_fields["partial_frequency"].setValue(case.outputs.partial_frequency)
+        self._combo_fields["checkpoint_format"].setCurrentText(case.outputs.checkpoint_format.value)
+        self._int_fields["stream_frequency"].setValue(case.outputs.stream_frequency)
         self._int_fields["checkpoint_frequency"].setValue(case.outputs.checkpoint_frequency)
-        self._apply_output_format(case.outputs.format.value)
 
         for face in Face:
             condition = case.boundaries.find_face(face)
@@ -427,9 +411,8 @@ class SimulationParametersDialog(QtWidgets.QDialog):
                 viscous_scheme=self._combo_fields["viscous_scheme"].currentText().strip(),
             ),
             outputs=OutputControl(
-                format=parse_output_format(self._combo_fields["output_format"].currentText().strip()),
-                total_frequency=self._int_fields["total_frequency"].value(),
-                partial_frequency=self._int_fields["partial_frequency"].value(),
+                checkpoint_format=parse_checkpoint_format(self._combo_fields["checkpoint_format"].currentText().strip()),
+                stream_frequency=self._int_fields["stream_frequency"].value(),
                 checkpoint_frequency=self._int_fields["checkpoint_frequency"].value(),
             ),
         )

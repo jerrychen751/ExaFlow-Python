@@ -8,13 +8,13 @@ from vtkmodules.vtkCommonDataModel import vtkImageData  # type: ignore
 from vtkmodules.util.numpy_support import numpy_to_vtk  # type: ignore
 
 
-def load_total_csv_to_imagedata(file_path: str) -> vtkImageData:
+def load_csv_checkpoint_to_imagedata(file_path: str) -> vtkImageData:
     """
-    Load a `*_Total.csv` written by `format_field_csv` into vtkImageData in cell-index space. The header states the dimension: `x,u,p` is 1D, `x,y,u,v,p` is 2D and `x,y,z,u,v,w,p` is 3D. A case below 3D becomes a grid one point deep on each axis it does not have, and the velocity components it does not have stay zero.
+    Load a CSV checkpoint or field table into vtkImageData in cell-index space. The header states the dimension: `x,u,p` is 1D, `x,y,u,v,p` is 2D and `x,y,z,u,v,w,p` is 3D. A case below 3D becomes a grid one point deep on each axis it does not have, and the velocity components it does not have stay zero.
 
     A line that starts with `#` before the header states where the run had reached, as `# step=400 time=0.8 dt=0.002`. Those three values reach the field data of the image, under the names a `.vtr` file uses for them, and a file written without the line loads with no field data.
 
-    The spacing is 1.0 on every axis, so the result is indexed in cells and not in metres. The CSV carries no physical extent; read the matching `.vtr` file when the caller needs metres.
+    The spacing is 1.0 on every axis, so the result is indexed in cells and not in meters. A checkpoint's embedded case carries its physical extent, but this loader keeps the field table in index space.
     """
 
     absolute_path = os.path.abspath(file_path)
@@ -23,10 +23,11 @@ def load_total_csv_to_imagedata(file_path: str) -> vtkImageData:
         csv_reader = csv.reader(csv_file)
         header = next(csv_reader, None)
         while header is not None and header and header[0].lstrip().startswith("#"):
-            for field in header[0].lstrip("# ").split():
-                name, _, value = field.partition("=")
-                if value:
-                    stamp[name] = float(value)
+            if header[0].lstrip().startswith("# step="):
+                for field in header[0].lstrip("# ").split():
+                    name, _, value = field.partition("=")
+                    if value:
+                        stamp[name] = float(value)
             header = next(csv_reader, None)
         if header is None:
             raise ValueError(f"{absolute_path} is empty; expected a header row such as x,y,z,u,v,w,p.")

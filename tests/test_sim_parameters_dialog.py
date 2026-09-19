@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from PySide6 import QtWidgets
 
-from exaflow.config import Case
+from exaflow.config import Case, CheckpointFormat
 from exaflow.config.case_xml import read_case
 from exaflow.gui.sim_parameters_dialog import SimulationParametersDialog, build_default_case
 
@@ -39,3 +39,10 @@ def test_a_zero_count_before_a_set_one_is_refused(qt_application: QtWidgets.QApp
 
     with pytest.raises(ValueError, match="nz must be 0 as well, got nz = 50"):
         dialog.read_case()
+
+
+def test_the_checkpoint_format_can_be_changed(qt_application: QtWidgets.QApplication) -> None:
+    dialog = SimulationParametersDialog(None, build_default_case())
+    dialog._combo_fields["checkpoint_format"].setCurrentText("CSV")
+
+    assert dialog.read_case().outputs.checkpoint_format is CheckpointFormat.CSV

@@ -11,9 +11,8 @@ import mpi4py.MPI as mpi
 
 from exaflow.config import (
     Boundaries, BoundaryCondition, Case, FaceCondition, Fluid, Grid,
-    InitialConditions, TimeControl, UniformValue,
+    InitialConditions, OutputControl, TimeControl, UniformValue,
 )
-from exaflow.io.writers import TotalCsvWriter
 from exaflow.run import resume_case
 from exaflow.session import SimulationSession
 
@@ -23,19 +22,18 @@ case = Case(
     time=TimeControl(num_steps=12, cfl=0.25, integration_order=3),
     boundaries=Boundaries(left=FaceCondition(BoundaryCondition.INFLOW, (2.0, 1.0, 1.0))),
     initial=InitialConditions(velocity=tuple((UniformValue(1.0),) for _ in range(3))),
+    outputs=OutputControl(checkpoint_frequency=6),
 )
 comm = mpi.COMM_WORLD
 directory = sys.argv[1]
 mode = sys.argv[2] if len(sys.argv) > 2 else "all"
 
 if mode == "finish":
-    resume_case(os.path.join(directory, "Checkpoint_6.npz"), comm, output_directory=directory)
+    resume_case(os.path.join(directory, "Checkpoint_6.csv"), comm, output_directory=directory)
 else:
-    session = SimulationSession(case, comm, output_directory=directory, writers=())
-    session.writers = (TotalCsvWriter(directory, session.subdomain, comm),)
+    session = SimulationSession(case, comm, output_directory=directory)
     if mode == "half":
         for _ in range(6):
             session.advance_one_step()
-        session.save_checkpoint("6")
     else:
         session.run_until_complete(write_initial=False)

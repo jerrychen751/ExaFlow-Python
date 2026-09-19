@@ -36,6 +36,7 @@ def run_exaflow(tmp_path: Path, build_case: Callable[..., Case]) -> Callable[...
                 (6, 5),
                 time=TimeControl(2, 0.25, 1),
                 initial=InitialConditions(velocity=((UniformValue(1.0),), (UniformValue(0.0),))),
+                outputs=OutputControl(checkpoint_frequency=1),
             )
         (tmp_path / f"{name}.xml").write_text(write_case(case), encoding="utf-8")
         command = [sys.executable, "-m", "exaflow.cli", *arguments]
@@ -66,7 +67,7 @@ def test_a_run_writes_one_directory_and_names_it_on_stdout(
     runs = list((tmp_path / "runs").iterdir())
     assert len(runs) == 1
     assert completed.stdout.strip() == f"Wrote {runs[0]}"
-    assert "Final_Total.csv" in [entry.name for entry in runs[0].iterdir()]
+    assert "Checkpoint_Final.csv" in [entry.name for entry in runs[0].iterdir()]
 
 
 def test_the_run_folder_takes_its_name_from_the_case_file(
@@ -137,14 +138,14 @@ def test_a_resume_continues_the_run_a_checkpoint_holds(
         case=case,
     )
     assert first.returncode == 0, first.stderr[-2000:]
-    checkpoint = next((tmp_path / "runs").glob("*/Checkpoint_1.npz"))
+    checkpoint = next((tmp_path / "runs").glob("*/Checkpoint_1.csv"))
 
     completed = run_exaflow("run", "--resume", str(checkpoint))
 
     assert completed.returncode == 0, completed.stderr[-2000:]
     continued = Path(completed.stdout.strip().removeprefix("Wrote "))
-    assert (continued / "Resumed_Total.csv").is_file()
-    assert (continued / "Final_Total.csv").is_file()
+    assert (continued / "Checkpoint_2.csv").is_file()
+    assert (continued / "Checkpoint_Final.csv").is_file()
 
 
 @pytest.mark.filterwarnings(
@@ -155,7 +156,7 @@ def test_a_stream_port_receives_the_first_and_the_last_state(
     run_exaflow: Callable[..., subprocess.CompletedProcess[str]],
 ) -> None:
     """
-    The two-step case has no interval, so the run sends exactly the states it writes: the original one and the final one. Each arrives as one length-prefixed pickled grid on its own connection.
+    The two-step case has no intermediate stream interval, so the run sends the original and final states. Each arrives as one length-prefixed pickled grid on its own connection.
     """
 
     listener = socket.socket()

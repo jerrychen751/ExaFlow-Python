@@ -9,12 +9,12 @@ from exaflow.config import (
     Boundaries,
     BoundaryCondition,
     Case,
+    CheckpointFormat,
     FaceCondition,
     Fluid,
     Grid,
     InitialConditions,
     OutputControl,
-    OutputFormat,
     StepValue,
     TimeControl,
     UniformValue,
@@ -43,7 +43,7 @@ def build_full_case(dimension: int) -> Case:
                 (StepValue(2.0, (0.25,) * dimension, (0.75,) * dimension),) for _ in range(dimension)
             ),
         ),
-        outputs=OutputControl(format=OutputFormat.VTK, total_frequency=2),
+        outputs=OutputControl(checkpoint_format=CheckpointFormat.VTK, stream_frequency=2),
     )
 
 
@@ -110,11 +110,12 @@ def read_template_root(path: Path) -> ElementTree.Element:
     [
         ("Simulation", "FluidProperties"),
         ("Simulation", "OutputProperties"),
-        ("OutputProperties", "Format"),
+        ("OutputProperties", "CheckpointFormat"),
         ("GridProperties", "Domain"),
         ("GridProperties", "EndTime"),
         ("GridProperties", "AdaptiveTimeStep"),
-        ("OutputProperties", "WriteCheckpointFrequency"),
+        ("OutputProperties", "StreamFrequency"),
+        ("OutputProperties", "CheckpointFrequency"),
         ("BoundaryConditions", "LeftWall"),
     ],
 )
@@ -141,7 +142,7 @@ def test_a_missing_element_names_the_parent_and_the_tag(
         ("Rho", "dense", "<Rho> must be a number"),
         ("IncludeConvectionEffects", "yes", "<IncludeConvectionEffects> must be True or False"),
         ("LeftWall", "Sponge", "Unknown boundary condition 'Sponge'"),
-        ("Format", "HDF5", "Unknown output format 'HDF5'"),
+        ("CheckpointFormat", "HDF5", "Unknown checkpoint format 'HDF5'"),
     ],
 )
 def test_a_value_of_the_wrong_type_names_its_tag(

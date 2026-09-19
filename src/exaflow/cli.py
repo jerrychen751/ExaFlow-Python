@@ -3,7 +3,7 @@ The `exaflow` console entry point.
 
     exaflow run --case examples/input_template.xml
     mpiexec -n 4 exaflow run --case examples/input_template.xml
-    mpiexec -n 4 exaflow run --resume ~/Documents/ExaFlow/2026-08-31_120000_template/Checkpoint_400.npz
+    mpiexec -n 4 exaflow run --resume ~/Documents/ExaFlow/2026-08-31_120000_template/Checkpoint_400.vtr
 
 This is the supported way to run a case without writing a driver, and it is what the GUI launches.
 """

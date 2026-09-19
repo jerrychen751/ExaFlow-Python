@@ -9,7 +9,6 @@ dependencies = [
     "mpi4py",
     "openmpi; sys_platform != 'win32'",
     "scipy",
-    "pyevtk",
     "pyside6",
     "pyvista",
     "pyvistaqt",

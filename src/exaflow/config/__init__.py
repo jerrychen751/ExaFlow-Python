@@ -10,12 +10,13 @@ from .case import Case, SolverOptions
 from .fluid import Fluid
 from .grid import Grid
 from .initial_conditions import FieldInitial, InitialConditions, StepValue, UniformValue
-from .time_control import OutputControl, OutputFormat, TimeControl, parse_output_format
+from .time_control import CheckpointFormat, OutputControl, TimeControl, parse_checkpoint_format
 
 __all__ = [
     "Boundaries",
     "BoundaryCondition",
     "Case",
+    "CheckpointFormat",
     "Face",
     "FaceCondition",
     "FieldInitial",
@@ -23,12 +24,11 @@ __all__ = [
     "Grid",
     "InitialConditions",
     "OutputControl",
-    "OutputFormat",
     "SolverOptions",
     "StepValue",
     "TimeControl",
     "UniformValue",
     "collect_faces",
     "parse_boundary_condition",
-    "parse_output_format",
+    "parse_checkpoint_format",
 ]

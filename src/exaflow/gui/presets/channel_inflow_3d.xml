@@ -175,9 +175,8 @@
     <IncludePressureEffects>False</IncludePressureEffects>
   </SolverProperties>
   <OutputProperties>
-    <Format>VTK</Format>
-    <WriteTotalFrequency>20</WriteTotalFrequency>
-    <WritePartialFrequency>-1</WritePartialFrequency>
-    <WriteCheckpointFrequency>-1</WriteCheckpointFrequency>
+    <CheckpointFormat>VTK</CheckpointFormat>
+    <StreamFrequency>20</StreamFrequency>
+    <CheckpointFrequency>-1</CheckpointFrequency>
   </OutputProperties>
 </Simulation>

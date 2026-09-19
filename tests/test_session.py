@@ -11,12 +11,12 @@ from exaflow.config import (
     Boundaries,
     BoundaryCondition,
     Case,
+    CheckpointFormat,
     FaceCondition,
     Fluid,
     Grid,
     InitialConditions,
     OutputControl,
-    OutputFormat,
     TimeControl,
     UniformValue,
 )
@@ -45,27 +45,27 @@ def test_a_serial_run_stays_finite_and_respects_the_inflow(moving_case: Case) ->
 
 
 def test_a_session_with_no_destination_writes_nothing(moving_case: Case) -> None:
-    assert SimulationSession(moving_case).writers == ()
+    session = SimulationSession(moving_case)
+    assert session.checkpoint_writer is None
+    assert session.stream_writer is None
 
 
-def test_explicit_writers_replace_the_standard_set(tmp_path: Path, moving_case: Case) -> None:
-    from exaflow.io.writers import RankCsvWriter
+def test_an_output_directory_builds_the_selected_checkpoint_writer(tmp_path: Path, moving_case: Case) -> None:
+    from exaflow.io.writers import CsvCheckpointWriter
 
-    session = SimulationSession(moving_case, output_directory=str(tmp_path), writers=())
-    assert session.writers == ()
+    session = SimulationSession(moving_case, output_directory=str(tmp_path))
 
-    session = SimulationSession(moving_case, writers=(RankCsvWriter(str(tmp_path), session.subdomain),))
-    assert len(session.writers) == 1
+    assert isinstance(session.checkpoint_writer, CsvCheckpointWriter)
 
 
-def test_a_stream_port_adds_a_stream_writer_at_the_whole_domain_interval(moving_case: Case) -> None:
+def test_a_stream_port_adds_a_stream_writer_at_the_stream_interval(moving_case: Case) -> None:
     from exaflow.io.writers import StreamWriter
 
-    case = replace(moving_case, outputs=OutputControl(total_frequency=3))
-    session = SimulationSession(case, writers=(), stream_port=12345)
+    case = replace(moving_case, outputs=OutputControl(stream_frequency=3))
+    session = SimulationSession(case, stream_port=12345)
 
-    assert [type(writer) for writer in session.writers] == [StreamWriter]
-    assert session.writers[0].frequency == 3
+    assert isinstance(session.stream_writer, StreamWriter)
+    assert session.stream_writer.frequency == 3
 
 
 def test_the_position_starts_at_zero_and_moves_with_every_step(moving_case: Case) -> None:
@@ -181,14 +181,10 @@ def test_a_checkpoint_interval_with_nowhere_to_write_is_refused(build_case: Call
         SimulationSession(case)
 
 
-def test_writers_produce_the_expected_files(tmp_path: Path, moving_case: Case) -> None:
+def test_a_run_without_a_checkpoint_interval_writes_no_checkpoints(tmp_path: Path, moving_case: Case) -> None:
     SimulationSession(moving_case, output_directory=str(tmp_path)).run_until_complete()
 
-    written = sorted(entry.name for entry in tmp_path.iterdir())
-    assert "Final_Total.csv" in written
-    assert "Final_0.csv" in written
-    assert "Original_Total.csv" in written
-    assert not any(name.endswith(".partial") for name in written)
+    assert not list(tmp_path.iterdir())
 
 
 def test_a_run_folder_holds_the_one_format_the_case_selected(
@@ -196,19 +192,19 @@ def test_a_run_folder_holds_the_one_format_the_case_selected(
     build_case: Callable[..., Case],
 ) -> None:
     """
-    The case selects one format, so no writer of another format runs, and neither the interval writes nor the first and last state leave a file of a second format behind.
+    The case selects one checkpoint format, so no checkpoint of the other format appears.
     """
 
     case = build_case(
         (6, 6, 6),
         time=TimeControl(5, 0.25, 1),
         initial=InitialConditions(velocity=tuple((UniformValue(1.0),) for _ in range(3))),
-        outputs=OutputControl(format=OutputFormat.VTK, total_frequency=2),
+        outputs=OutputControl(checkpoint_format=CheckpointFormat.VTK, checkpoint_frequency=2),
     )
     SimulationSession(case, output_directory=str(tmp_path)).run_until_complete()
 
     written = sorted(entry.name for entry in tmp_path.iterdir())
-    assert written == ["2_Total.vtr", "4_Total.vtr", "Final_Total.vtr", "Original_Total.vtr"]
+    assert written == ["Checkpoint_2.vtr", "Checkpoint_4.vtr", "Checkpoint_Final.vtr"]
 
 
 def test_an_interval_writes_at_the_steps_it_selects(
@@ -216,22 +212,22 @@ def test_an_interval_writes_at_the_steps_it_selects(
     build_case: Callable[..., Case],
 ) -> None:
     """
-    The interval selects the completed step count, so a frequency of 2 over five steps writes after step 2 and step 4. The first and last state go through every writer whatever the interval, and they carry the labels Original and Final instead.
+    The interval selects the completed step count, so a frequency of 2 over five steps saves checkpoints after steps 2 and 4, followed by the final checkpoint.
     """
 
     case = build_case(
         (6, 6, 6),
         time=TimeControl(5, 0.25, 1),
         initial=InitialConditions(velocity=tuple((UniformValue(1.0),) for _ in range(3))),
-        outputs=OutputControl(total_frequency=2),
+        outputs=OutputControl(checkpoint_frequency=2),
     )
     SimulationSession(case, output_directory=str(tmp_path)).run_until_complete()
 
-    totals = sorted(entry.name for entry in tmp_path.iterdir() if entry.name.endswith("_Total.csv"))
-    assert totals == ["2_Total.csv", "4_Total.csv", "Final_Total.csv", "Original_Total.csv"]
+    checkpoints = sorted(entry.name for entry in tmp_path.iterdir())
+    assert checkpoints == ["Checkpoint_2.csv", "Checkpoint_4.csv", "Checkpoint_Final.csv"]
 
 
-def test_every_field_file_states_the_step_the_time_and_the_step_size(
+def test_every_checkpoint_states_the_step_the_time_and_the_step_size(
     tmp_path: Path,
     build_case: Callable[..., Case],
 ) -> None:
@@ -239,14 +235,14 @@ def test_every_field_file_states_the_step_the_time_and_the_step_size(
         (6, 6),
         time=TimeControl(2, 0.25, 1),
         initial=InitialConditions(velocity=((UniformValue(1.0),), (UniformValue(0.5),))),
-        outputs=OutputControl(total_frequency=1),
+        outputs=OutputControl(checkpoint_frequency=1),
     )
     session = SimulationSession(case, output_directory=str(tmp_path))
     session.run_until_complete()
 
-    first = (tmp_path / "Original_Total.csv").read_text(encoding="utf-8").splitlines()[0]
-    second = (tmp_path / "2_Total.csv").read_text(encoding="utf-8").splitlines()[0]
-    assert first == f"# step=0 time=0.0 dt={session.dt!r}"
+    first = (tmp_path / "Checkpoint_1.csv").read_text(encoding="utf-8").splitlines()[1]
+    second = (tmp_path / "Checkpoint_2.csv").read_text(encoding="utf-8").splitlines()[1]
+    assert first == f"# step=1 time={session.dt!r} dt={session.dt!r}"
     assert second == f"# step=2 time={2 * session.dt!r} dt={session.dt!r}"
 
 
@@ -259,31 +255,15 @@ def test_a_vtk_file_carries_the_time_paraview_reads(
         (6, 6),
         time=TimeControl(2, 0.25, 1),
         initial=InitialConditions(velocity=((UniformValue(1.0),), (UniformValue(0.5),))),
-        outputs=OutputControl(format=OutputFormat.VTK),
+        outputs=OutputControl(checkpoint_format=CheckpointFormat.VTK, checkpoint_frequency=1),
     )
     session = SimulationSession(case, output_directory=str(tmp_path))
     session.run_until_complete()
 
-    field_data = pyvista.read(str(tmp_path / "Final_Total.vtr")).GetFieldData()
+    field_data = pyvista.read(str(tmp_path / "Checkpoint_Final.vtr")).GetFieldData()
     assert field_data.GetArray("TimeValue").GetTuple1(0) == pytest.approx(session.current_time)
     assert int(field_data.GetArray("StepIndex").GetTuple1(0)) == 2
     assert field_data.GetArray("StepSize").GetTuple1(0) == pytest.approx(session.dt)
-
-
-def test_write_initial_false_leaves_out_the_starting_state(
-    tmp_path: Path,
-    build_case: Callable[..., Case],
-) -> None:
-    case = build_case(
-        (6, 6, 6),
-        time=TimeControl(2, 0.25, 1),
-        initial=InitialConditions(velocity=tuple((UniformValue(1.0),) for _ in range(3))),
-    )
-    SimulationSession(case, output_directory=str(tmp_path)).run_until_complete(write_initial=False)
-
-    written = sorted(entry.name for entry in tmp_path.iterdir())
-    assert not any(name.startswith("Original") for name in written)
-    assert "Final_Total.csv" in written
 
 
 @pytest.mark.gui
@@ -294,7 +274,7 @@ def test_vtk_output_pads_a_case_below_three_axes(
     extent: tuple[float, ...],
 ) -> None:
     """
-    pyevtk rejects an array that is not 3D, so a 1D or 2D case has to reach it padded to three axes.
+    A VTK rectilinear grid always has three axes, so a 1D or 2D checkpoint pads the missing axes to one point.
     """
 
     pyvista = pytest.importorskip("pyvista")
@@ -303,11 +283,11 @@ def test_vtk_output_pads_a_case_below_three_axes(
         grid=Grid(shape, extent, 1),
         time=TimeControl(1, 0.25, 1),
         initial=InitialConditions(velocity=tuple((UniformValue(1.0),) for _ in shape)),
-        outputs=OutputControl(format=OutputFormat.VTK),
+        outputs=OutputControl(checkpoint_format=CheckpointFormat.VTK, checkpoint_frequency=1),
     )
     SimulationSession(case, output_directory=str(tmp_path)).run_until_complete()
 
-    mesh = pyvista.read(str(tmp_path / "Final_Total.vtr"))
+    mesh = pyvista.read(str(tmp_path / "Checkpoint_Final.vtr"))
     assert mesh.dimensions == (*shape, *(1,) * (3 - len(shape)))
     assert mesh.bounds[: 2 * len(shape)] == pytest.approx([bound for span in extent for bound in (0.0, span)])
     assert sorted(mesh.point_data.keys()) == ["pressure", "velocity"]
@@ -319,12 +299,12 @@ def serial_reference_output(
     run_under_mpiexec: Callable[..., None],
 ) -> bytes:
     """
-    The whole-domain CSV that `tests/_run_case.py` writes on one rank. Every rank count is compared against this one run, so mpiexec starts once for the reference and once for each count under test.
+    The CSV checkpoint that `tests/_run_case.py` writes on one rank. Every rank count is compared against this one run, so mpiexec starts once for the reference and once for each count under test.
     """
 
     directory = tmp_path_factory.mktemp("serial")
     run_under_mpiexec("_run_case.py", 1, str(directory))
-    return (directory / "Final_Total.csv").read_bytes()
+    return (directory / "Checkpoint_Final.csv").read_bytes()
 
 
 @pytest.mark.mpi
@@ -341,7 +321,7 @@ def test_the_answer_does_not_depend_on_the_rank_count(
     """
 
     run_under_mpiexec("_run_case.py", num_procs, str(tmp_path))
-    written = (tmp_path / "Final_Total.csv").read_bytes()
+    written = (tmp_path / "Checkpoint_Final.csv").read_bytes()
     assert written == serial_reference_output, f"1 rank and {num_procs} ranks disagree"
 
 
@@ -362,5 +342,5 @@ def test_a_run_stopped_and_continued_answers_what_the_whole_run_answers(
     run_under_mpiexec("_run_case.py", write_procs, str(tmp_path), "half")
     run_under_mpiexec("_run_case.py", finish_procs, str(tmp_path), "finish")
 
-    written = (tmp_path / "Final_Total.csv").read_bytes()
+    written = (tmp_path / "Checkpoint_Final.csv").read_bytes()
     assert written == serial_reference_output, f"a restart at {finish_procs} ranks answers something else"

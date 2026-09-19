@@ -67,8 +67,8 @@ class HelpDialog(QtWidgets.QDialog):
         <ul>
         <li><b>Simulation Management:</b> Run the configured case through the standard ExaFlow MPI command</li>
         <li><b>Real-time Visualization:</b> View simulation results in interactive 3D plots</li>
-        <li><b>Auto-loading:</b> Automatically load the latest simulation results</li>
-        <li><b>Multiple File Formats:</b> Support for VTK (.vtr) and CSV files</li>
+        <li><b>Auto-loading:</b> Automatically load the latest checkpoint</li>
+        <li><b>Checkpoint Formats:</b> Readable CSV or efficient binary VTK (.vtr)</li>
         <li><b>Interactive Controls:</b> Toggle visualization elements and camera presets</li>
         </ul>
         
@@ -84,7 +84,7 @@ class HelpDialog(QtWidgets.QDialog):
         <li>Set the number of MPI processes (default: 4)</li>
         <li>Choose the output root</li>
         <li>Click "Run" to start <code>exaflow run</code> through MPI, or "Resume..." to continue from a checkpoint</li>
-        <li>The viewer loads new result files from the output root</li>
+        <li>The viewer receives intermediate states through the live stream and can load checkpoints from disk</li>
         </ol>
         """)
         
@@ -111,7 +111,7 @@ class HelpDialog(QtWidgets.QDialog):
         
         <h3>Auto-loading:</h3>
         <ul>
-        <li><b>Auto-load newest:</b> Automatically loads the most recent .vtr or *_Total.csv file</li>
+        <li><b>Auto-load newest checkpoint:</b> Automatically loads the most recent Checkpoint_*.vtr or Checkpoint_*.csv file</li>
         <li>Updates every 2 seconds when enabled</li>
         <li>Helps monitor simulation progress in real-time</li>
         </ul>
@@ -121,7 +121,8 @@ class HelpDialog(QtWidgets.QDialog):
         <li><b>Run:</b> Start the simulation with current settings</li>
         <li><b>Resume...:</b> Continue the run a checkpoint holds; the case comes from the checkpoint, not from the form</li>
         <li><b>Stop:</b> Terminate the running simulation</li>
-        <li><b>Open File...:</b> Manually select a result file to load</li>
+        <li><b>Clear:</b> Stop the current run, clear the viewer and log, and keep the configured case ready to run again from the start</li>
+        <li><b>Open File...:</b> Manually select a checkpoint to load</li>
         <li><b>?:</b> Show this help dialog</li>
         </ul>
         
@@ -168,7 +169,7 @@ class HelpDialog(QtWidgets.QDialog):
         <li><b>Slice:</b> Cut the result on one axis and show that plane by itself</li>
         <li><b>Axis:</b> The axis the plane cuts across (X, Y or Z)</li>
         <li><b>Position:</b> Moves the plane along that axis; the label states the coordinate and its unit</li>
-        <li>The unit is metres for a .vtr file and cells for a CSV file, which carries no physical extent</li>
+        <li>The unit is meters for a .vtr file and cells for a CSV checkpoint, which the loader displays in index space</li>
         <li>The camera faces the plane and stops rotating; turn Slice off to get the volume and free rotation back</li>
         <li>The control is disabled for a 1D or 2D result, which is already a cross-section</li>
         </ul>
@@ -209,29 +210,31 @@ class HelpDialog(QtWidgets.QDialog):
         text = QtWidgets.QTextEdit()
         text.setReadOnly(True)
         text.setHtml("""
-        <h2>Supported File Formats</h2>
+        <h2>Checkpoint File Formats</h2>
         
         <h3>VTK Rectilinear Grid (.vtr):</h3>
         <ul>
-        <li><b>Format:</b> VTK XML Rectilinear Grid format</li>
-        <li><b>Content:</b> 3D structured grid with scalar and vector fields</li>
-        <li><b>Advantages:</b> High precision, supports multiple data arrays</li>
-        <li><b>Use case:</b> Primary output format for detailed analysis</li>
+        <li><b>Format:</b> Binary VTK XML Rectilinear Grid</li>
+        <li><b>Content:</b> Case XML, run position and full-domain scalar and vector fields</li>
+        <li><b>Advantages:</b> Compact and efficient to read and write</li>
+        <li><b>Use case:</b> Routine restart checkpoints and ParaView analysis</li>
         </ul>
         
-        <h3>CSV Total Files (*_Total.csv):</h3>
+        <h3>CSV Checkpoints (Checkpoint_*.csv):</h3>
         <ul>
-        <li><b>Format:</b> Comma-separated values with spatial coordinates</li>
-        <li><b>Content:</b> Point data including pressure and velocity</li>
-        <li><b>Advantages:</b> Human-readable, easy to process</li>
-        <li><b>Use case:</b> Quick visualization and data export</li>
+        <li><b>Format:</b> Comma-separated values with embedded case and run metadata</li>
+        <li><b>Content:</b> Case XML, run position and full-domain pressure and velocity</li>
+        <li><b>Advantages:</b> Human-readable and easy to inspect or process</li>
+        <li><b>Use case:</b> Debugging and readable restart checkpoints</li>
         </ul>
+
+        <p>Intermediate time steps reach the viewer through the live stream. They are not written as CSV or VTK files.</p>
         
         <h3>File Loading:</h3>
         <ul>
-        <li><b>Automatic:</b> Auto-load feature monitors output directory</li>
-        <li><b>Manual:</b> Use "Open File..." to select specific files</li>
-        <li><b>Priority:</b> .vtr files preferred over CSV for visualization</li>
+        <li><b>Automatic:</b> Auto-load monitors the output directory for checkpoints</li>
+        <li><b>Manual:</b> Use "Open File..." to select a checkpoint</li>
+        <li><b>Priority:</b> .vtr is preferred when equally new files are present</li>
         <li><b>Error handling:</b> Unsupported files show warning messages</li>
         </ul>
         
@@ -274,11 +277,11 @@ class HelpDialog(QtWidgets.QDialog):
         <li><b>Check:</b> The ExaFlow command is available in the active Python environment</li>
         </ul>
         
-        <h4>No Results Loading:</h4>
+        <h4>No Checkpoints Loading:</h4>
         <ul>
         <li><b>Check:</b> Output directory path is correct</li>
-        <li><b>Check:</b> Simulation is actually producing files</li>
-        <li><b>Check:</b> File naming matches expected patterns (*_Total.csv, *.vtr)</li>
+        <li><b>Check:</b> Checkpoint frequency is not -1</li>
+        <li><b>Check:</b> File naming matches Checkpoint_*.csv or Checkpoint_*.vtr</li>
         <li><b>Try:</b> Manual file loading with "Open File..."</li>
         </ul>
         

@@ -12,7 +12,7 @@ from pyvistaqt import QtInteractor  # type: ignore
 import numpy as np
 import vtk  # type: ignore[import-untyped]
 
-from .csv_loader import load_total_csv_to_imagedata
+from .csv_loader import load_csv_checkpoint_to_imagedata
 
 
 class PyVistaViewer(QtWidgets.QFrame):
@@ -119,13 +119,13 @@ class PyVistaViewer(QtWidgets.QFrame):
         self.load_mesh(mesh)
 
     def load_csv(self, path: str) -> None:
-        vtk_image_data = load_total_csv_to_imagedata(path)
+        vtk_image_data = load_csv_checkpoint_to_imagedata(path)
         mesh = pv.wrap(vtk_image_data)
         self.load_mesh(mesh, is_index_space=True)
 
     def load_mesh(self, mesh: pv.DataSet, *, is_index_space: bool = False) -> None:
         """
-        Show `mesh` and drop whatever was on screen. Set `is_index_space` for a mesh built from a CSV file, which is indexed in cells; leave it false for a `.vtr` file and for a streamed dataset, which carry metres. The slice position label reads this to name its unit.
+        Show `mesh` and drop whatever was on screen. Set `is_index_space` for a mesh built from a CSV file, which is indexed in cells; leave it false for a `.vtr` file and for a streamed dataset, which carry meters. The slice position label reads this to name its unit.
         """
 
         self.clear()
@@ -638,4 +638,3 @@ class PyVistaViewer(QtWidgets.QFrame):
         distance = self._read_dataset_size()
         offset = distance / math.sqrt(3.0)
         self._set_camera((center[0] + offset, center[1] + offset, center[2] + offset), (0.0, 0.0, 1.0))
-

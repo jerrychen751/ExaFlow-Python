@@ -220,7 +220,7 @@ def test_the_stream_writer_sends_the_whole_domain_with_its_level(
     build_subdomain: Callable[..., Subdomain],
 ) -> None:
     """
-    The grid that arrives is the one the viewer shows: a rectilinear grid in metres, with the pressure and the velocity as point data and the step and the time as field data, exactly as a `.vtr` file states them.
+    The grid that arrives is the one the viewer shows: a rectilinear grid in meters, with the pressure and velocity as point data and the run position as field data.
     """
 
     server, port, received = listening_server()
@@ -228,7 +228,7 @@ def test_the_stream_writer_sends_the_whole_domain_with_its_level(
     subdomain = build_subdomain(case.grid)
     state = allocate_state(subdomain, 1)
     state.pressure[subdomain.interior] = np.arange(12.0).reshape(4, 3)
-    writer = StreamWriter(port, case.grid, subdomain, None, frequency=2)
+    writer = StreamWriter(port, case, subdomain, None, frequency=2)
 
     thread = threading.Thread(target=lambda: writer.write("Original", state, TimeLevel(4, 0.5, 0.125)))
     thread.start()
@@ -262,4 +262,4 @@ def test_the_stream_writer_marches_on_when_no_viewer_listens(
     case = build_case((4,))
     subdomain = build_subdomain(case.grid)
 
-    StreamWriter(port, case.grid, subdomain, None).write("Original", allocate_state(subdomain, 1), TimeLevel(0, 0.0, 0.1))
+    StreamWriter(port, case, subdomain, None).write("Original", allocate_state(subdomain, 1), TimeLevel(0, 0.0, 0.1))

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from .config import Case
 from .config.case_xml import parse_case
 from .fields import FlowState
-from .io.checkpoint import read_case_text
+from .io.checkpoint import read_checkpoint_for_resume
 from .session import SimulationSession
 
 if TYPE_CHECKING:
@@ -41,7 +41,8 @@ def resume_case(
     Every MPI rank must call this function with the same arguments.
     """
 
-    stored_case = parse_case(ElementTree.fromstring(read_case_text(checkpoint_path, comm)))
+    stored_case_text, checkpoint = read_checkpoint_for_resume(checkpoint_path, comm)
+    stored_case = parse_case(ElementTree.fromstring(stored_case_text))
     if case is None:
         case = stored_case
     elif case.grid.shape != stored_case.grid.shape:
@@ -55,6 +56,7 @@ def resume_case(
         comm,
         output_directory=output_directory,
         checkpoint_path=checkpoint_path,
+        checkpoint=checkpoint,
         stream_port=stream_port,
     )
     return session.run_until_complete()

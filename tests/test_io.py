@@ -7,13 +7,12 @@ from typing import Callable
 import numpy as np
 import pytest
 
-from exaflow.config import Case, OutputControl, OutputFormat
+from exaflow.config import Case, CheckpointFormat, OutputControl
 from exaflow.fields import TimeLevel, allocate_state
 from exaflow.io.csv import format_field_csv, write_text_atomically
 from exaflow.io.storage import create_run_directory, resolve_output_root
-from exaflow.io.writers import RankCsvWriter, TotalCsvWriter, VtkWriter, build_writers, gather_domain_fields
+from exaflow.io.writers import CsvCheckpointWriter, VtkCheckpointWriter, build_checkpoint_writer, gather_domain_fields
 from exaflow.mpi.gather import gather_global_array
-from exaflow.mpi.process_grid import ProcessGrid
 from exaflow.mpi.subdomain import Subdomain
 
 LEVEL = TimeLevel(step_index=4, current_time=0.5, dt=0.125)
@@ -62,22 +61,22 @@ def test_a_value_reads_back_as_the_float_that_produced_it() -> None:
 
 
 def test_an_atomic_write_creates_the_parent_and_leaves_no_partial_file(tmp_path: Path) -> None:
-    path = tmp_path / "runs" / "Final_Total.csv"
+    path = tmp_path / "runs" / "Checkpoint_Final.csv"
 
     write_text_atomically(str(path), "x,u,p\n")
 
     assert path.read_text(encoding="utf-8") == "x,u,p\n"
-    assert sorted(entry.name for entry in path.parent.iterdir()) == ["Final_Total.csv"]
+    assert sorted(entry.name for entry in path.parent.iterdir()) == ["Checkpoint_Final.csv"]
 
 
 def test_an_atomic_write_replaces_the_file_that_is_there(tmp_path: Path) -> None:
-    path = tmp_path / "Final_Total.csv"
+    path = tmp_path / "Checkpoint_Final.csv"
     write_text_atomically(str(path), "first\n")
 
     write_text_atomically(str(path), "second\n")
 
     assert path.read_text(encoding="utf-8") == "second\n"
-    assert sorted(entry.name for entry in tmp_path.iterdir()) == ["Final_Total.csv"]
+    assert sorted(entry.name for entry in tmp_path.iterdir()) == ["Checkpoint_Final.csv"]
 
 
 def test_the_output_root_follows_the_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -162,38 +161,7 @@ def test_a_serial_gather_strips_the_ghost_layers(
     assert np.all(components[0] == 1.0)
 
 
-def test_the_rank_writer_names_its_file_after_the_label_and_the_rank(
-    tmp_path: Path,
-    build_case: Callable[..., Case],
-) -> None:
-    case = build_case((8,))
-    subdomain = Subdomain(case.grid, ProcessGrid((2,)), 1)
-    state = allocate_state(subdomain, 1)
-
-    RankCsvWriter(str(tmp_path), subdomain).write("Final", state, LEVEL)
-
-    written = tmp_path / "Final_1.csv"
-    assert written.is_file()
-    first_index = written.read_text(encoding="utf-8").splitlines()[2].split(",")[0]
-    assert int(first_index) == subdomain.bounds[0][0]
-
-
-def test_the_total_writer_names_one_file_for_the_whole_domain(
-    tmp_path: Path,
-    build_case: Callable[..., Case],
-    build_subdomain: Callable[..., Subdomain],
-) -> None:
-    case = build_case((8,))
-    subdomain = build_subdomain(case.grid)
-    state = allocate_state(subdomain, 1)
-
-    TotalCsvWriter(str(tmp_path), subdomain, None).write("Original", state, LEVEL)
-
-    written = tmp_path / "Original_Total.csv"
-    assert len(written.read_text(encoding="utf-8").splitlines()) == 10
-
-
-def test_a_csv_run_builds_the_whole_domain_and_per_rank_writers(
+def test_a_csv_case_builds_a_csv_checkpoint_writer(
     tmp_path: Path,
     build_case: Callable[..., Case],
     build_subdomain: Callable[..., Subdomain],
@@ -201,27 +169,20 @@ def test_a_csv_run_builds_the_whole_domain_and_per_rank_writers(
     case = build_case((8,))
     subdomain = build_subdomain(case.grid)
 
-    outputs = OutputControl(format=OutputFormat.CSV, total_frequency=2, partial_frequency=5)
-    writers = build_writers(str(tmp_path), case.grid, subdomain, None, outputs)
+    writer = build_checkpoint_writer(str(tmp_path), case, subdomain, None)
 
-    assert [type(writer) for writer in writers] == [TotalCsvWriter, RankCsvWriter]
-    assert [writer.frequency for writer in writers] == [2, 5]
+    assert isinstance(writer, CsvCheckpointWriter)
 
 
-def test_a_vtk_run_builds_the_vtk_writer_and_nothing_else(
+def test_a_vtk_case_builds_a_vtk_checkpoint_writer(
     tmp_path: Path,
     build_case: Callable[..., Case],
     build_subdomain: Callable[..., Subdomain],
 ) -> None:
-    """
-    One run writes one format, so a VTK case gets no CSV writer at all.
-    """
-
-    case = build_case((8,))
+    case = build_case((8,), outputs=OutputControl(checkpoint_format=CheckpointFormat.VTK, checkpoint_frequency=2))
     subdomain = build_subdomain(case.grid)
 
-    outputs = OutputControl(format=OutputFormat.VTK, total_frequency=2)
-    writers = build_writers(str(tmp_path), case.grid, subdomain, None, outputs)
+    writer = build_checkpoint_writer(str(tmp_path), case, subdomain, None)
 
-    assert [type(writer) for writer in writers] == [VtkWriter]
-    assert [writer.frequency for writer in writers] == [2]
+    assert isinstance(writer, VtkCheckpointWriter)
+    assert writer.frequency == 2

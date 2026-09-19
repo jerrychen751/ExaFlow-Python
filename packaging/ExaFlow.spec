@@ -13,7 +13,7 @@ datas = []
 binaries = []
 hiddenimports = ["vtkmodules.all", "vtkmodules.util.numpy_support", "vtkmodules.qt"]
 hiddenimports += collect_submodules("exaflow")
-for package_name in ("vtkmodules", "pyvista", "pyvistaqt", "pyevtk", "mpi4py"):
+for package_name in ("vtkmodules", "pyvista", "pyvistaqt", "mpi4py"):
     package_datas, package_binaries, package_hiddenimports = collect_all(package_name)
     datas += package_datas
     binaries += package_binaries

@@ -1,5 +1,5 @@
 """
-Watches an output directory and reports the newest result file it has not reported yet.
+Watches an output directory and reports the newest checkpoint it has not reported yet.
 """
 
 from __future__ import annotations
@@ -10,9 +10,9 @@ import os
 from PySide6 import QtCore
 
 
-class LatestResultWatcher(QtCore.QObject):
+class LatestCheckpointWatcher(QtCore.QObject):
     """
-    Polls one directory tree on a timer and emits `found` with the newest `.vtr` or `*_Total.csv` file each time that file changes.
+    Polls one directory tree on a timer and emits `found` with the newest CSV or VTK checkpoint each time that file changes.
 
     The watcher remembers the last path it reported, so it emits once per new file. A caller that loads a file some other way calls `note_loaded` to keep that memory in step, or the next poll reports a file the viewer already shows.
     """
@@ -60,8 +60,8 @@ class LatestResultWatcher(QtCore.QObject):
 
     @staticmethod
     def _find_latest_file(directory: str) -> str | None:
-        vtr_files = glob.glob(os.path.join(directory, "**", "*.vtr"), recursive=True)
-        csv_files = glob.glob(os.path.join(directory, "**", "*_Total.csv"), recursive=True)
+        vtr_files = glob.glob(os.path.join(directory, "**", "Checkpoint_*.vtr"), recursive=True)
+        csv_files = glob.glob(os.path.join(directory, "**", "Checkpoint_*.csv"), recursive=True)
         candidate_files = vtr_files + csv_files
         if not candidate_files:
             return None

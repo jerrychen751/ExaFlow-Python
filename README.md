@@ -55,28 +55,26 @@ Every run writes into its own folder under `~/Documents/ExaFlow`:
 ```
 ~/Documents/ExaFlow/
     2026-08-24_200239_input_template/
-        Original_Total.csv
-        Final_Total.csv
-        Final_0.csv
-        Final_1.csv
+        Checkpoint_100.csv
+        Checkpoint_200.csv
+        Checkpoint_Final.csv
 ```
 
-`*_Total.csv` holds the full domain, joined on rank 0. `*_<n>.csv` holds the part that rank `n` owned. A folder name is the start time plus a label, so a new run never overwrites an old one.
+Every file on disk is a restart checkpoint for the full domain, joined on rank 0. A folder name is the start time plus a label, so a new run never overwrites an old one.
 
-Every field file states where the run had reached. A CSV starts with a line such as `# step=400 time=0.8 dt=0.002` before the column header, and a `.vtr` carries the same three values as field data, where `TimeValue` is the name ParaView reads as the time of a file. The label of a file is the completed step count, so `400_Total.csv` holds the state after 400 steps.
+Every checkpoint carries the case, the full velocity and pressure fields, and where the run had reached. A CSV has readable metadata such as `# step=400 time=0.8 dt=0.002` before its field table. A binary `.vtr` carries the same values as VTK field data, where `TimeValue` is the name ParaView reads as the time of a file. The label is the completed step count, so `Checkpoint_400.csv` holds the state after 400 steps.
 
-One run writes one format, so a run folder holds `.csv` files or `.vtr` files and never both. `<Format>` in `<OutputProperties>` selects it, `CSV` or `VTK`, and the shipped template selects CSV:
+One run writes one checkpoint format, so a run folder holds `.csv` checkpoints or `.vtr` checkpoints and never both. CSV is readable in a text editor; binary VTK is smaller and faster to read and write. `<CheckpointFormat>` selects one, and the shipped template selects CSV:
 
 ```xml
 <OutputProperties>
-  <Format>CSV</Format>
-  <WriteTotalFrequency>100</WriteTotalFrequency>
-  <WritePartialFrequency>250</WritePartialFrequency>
-  <WriteCheckpointFrequency>-1</WriteCheckpointFrequency>
+  <CheckpointFormat>CSV</CheckpointFormat>
+  <StreamFrequency>100</StreamFrequency>
+  <CheckpointFrequency>100</CheckpointFrequency>
 </OutputProperties>
 ```
 
-`WriteTotalFrequency` is the interval in time steps of the whole-domain file, and `WritePartialFrequency` the interval of the per-rank files, which only CSV writes. Every case file carries both elements, so a VTK case sets `<WritePartialFrequency>` to -1 and is refused otherwise. An interval of -1 asks for no writes during the march; the first and last state are written whatever the interval. A VTK run writes `Original_Total.vtr`, `Final_Total.vtr` and one `<step>_Total.vtr` per interval, which is what the GUI viewer and ParaView read.
+`CheckpointFrequency` is the interval in completed time steps between restart files. `-1` writes no checkpoint, including at the end. `StreamFrequency` controls live intermediate states sent to a connected viewer; `-1` skips intermediate states, while the starting and final states are still streamed. Streaming never creates a CSV or VTK file.
 
 Set `EXAFLOW_OUTPUT_ROOT` to write the run folders somewhere else:
 
@@ -84,7 +82,7 @@ Set `EXAFLOW_OUTPUT_ROOT` to write the run folders somewhere else:
 EXAFLOW_OUTPUT_ROOT=/tmp/exaflow-runs uv run exaflow run --case examples/input_template.xml
 ```
 
-Set `EXAFLOW_STREAM_PORT` to a TCP port on localhost, and rank 0 also sends every state it writes to that port as a pickled PyVista rectilinear grid, one length-prefixed message per connection. The GUI sets it for the runs it starts. A run whose port nobody listens on prints one line per failed send and marches on.
+Set `EXAFLOW_STREAM_PORT` to a TCP port on localhost, and rank 0 sends the starting state, the selected intermediate states and the final state to that port as pickled PyVista rectilinear grids, one length-prefixed message per connection. The GUI sets it for the runs it starts. A run whose port nobody listens on prints one line per failed send and marches on.
 
 ### 4. Open the GUI
 
@@ -92,11 +90,11 @@ Set `EXAFLOW_STREAM_PORT` to a TCP port on localhost, and rank 0 also sends ever
 uv run python run_gui.py
 ```
 
-The window has a control column on the left and a 3D viewer on the right. Pick a case in the **Preset** box or edit one through **Simulation Params…**, set the number of MPI processes, and press Run. The GUI starts the standard `exaflow run --case` command through `mpiexec`, with `EXAFLOW_STREAM_PORT` set to the port its server listens on, so rank 0 sends every state it writes straight to the viewer over TCP on localhost. The viewer shows the newest state it has received and skips any that arrived while it was still drawing an earlier one, so a run that outpaces the display never queues up behind it. The viewer also loads the newest result file from the output root, which is how a run started outside the GUI appears. The case a new window opens on writes VTK, which carries the physical extent the slice control reports in metres; the Output & Misc tab switches it to CSV.
+The window has a control column on the left and a 3D viewer on the right. Pick a case in the **Preset** box or edit one through **Simulation Params…**, set the number of MPI processes, and press Run. The GUI starts the standard `exaflow run --case` command through `mpiexec`, with `EXAFLOW_STREAM_PORT` set to the port its server listens on, so rank 0 sends live states straight to the viewer over TCP on localhost. The viewer shows the newest state it has received and skips any that arrived while it was still drawing an earlier one, so a run that outpaces the display never queues up behind it. Clear stops that run, empties the viewer and run log, and leaves the same case configured so the next Run starts from the beginning. The viewer can also load the newest checkpoint from the output root, which is how a checkpoint written by a run outside the GUI appears. The case a new window opens on selects binary VTK checkpoints; the Output & Misc tab switches them to readable CSV.
 
 The viewer colors a result by speed, the magnitude of the velocity. **Color by** switches it to pressure, which stays at zero until the pressure projection is wired into the time loop. The ends of the color bar are rounded outward, and through the frames of one run they only widen, so the numbers beside the bar hold still while a run streams. A frame whose step count is lower than the last one starts a new range, and so does Run or Resume.
 
-The **Slice** row cuts a 3D result on one axis and shows that plane by itself. Pick the axis, move the position slider, and the camera faces the plane and stops rotating. The position label states the unit: metres for a `.vtr` file, and cells for a CSV file, which carries the indices and no physical extent. A 1D or 2D result is already a cross-section, so the viewer shows it flat and the control stays disabled.
+The **Slice** row cuts a 3D result on one axis and shows that plane by itself. Pick the axis, move the position slider, and the camera faces the plane and stops rotating. The position label states the unit: meters for a `.vtr` file, and cells for a CSV checkpoint, because the CSV loader keeps the field table in index space even though the embedded case carries the physical extent. A 1D or 2D result is already a cross-section, so the viewer shows it flat and the control stays disabled.
 
 ## Where to look
 
@@ -109,7 +107,7 @@ src/exaflow/
         boundaries.py # Face, FaceCondition, Boundaries
         boundary_conditions.py # BoundaryCondition and the strict parser for its names
         initial_conditions.py # UniformValue, StepValue as value types
-        time_control.py # TimeControl, OutputControl, OutputFormat
+        time_control.py # TimeControl, OutputControl, CheckpointFormat
         case_xml.py # read_case and write_case: one field map, both directions
     fields.py # FlowState: velocity (dimension, *padded), pressure (*padded)
     run.py # run_case: the typed application entry point
@@ -129,14 +127,15 @@ src/exaflow/
     boundary_application.py # writes boundary values into the ghost layers
     session.py # SimulationSession: one run in progress, and the one time loop
     io/
-        writers.py # Writer protocol, TotalCsvWriter, RankCsvWriter, VtkWriter
+        writers.py # whole-domain writer base, checkpoint writers and StreamWriter
         csv.py # CSV formatting and the atomic write
-        checkpoint.py # the restart format: write, read and spread one over the ranks
+        checkpoint.py # readable CSV and binary VTK restart formats
+        rectilinear.py # shared PyVista dataset construction
         storage.py # picks the run folder under ~/Documents/ExaFlow
     gui/
         main_window.py # wires the panels, the dialogs and the viewer together
         simulation_runner.py # the child process one run happens in
-        result_watcher.py # reports the newest result file in the output root
+        result_watcher.py # reports the newest checkpoint in the output root
         slice_controller.py # the cross-section row and the viewer state behind it
         viewer.py # PyVista 3D view
         sim_parameters_dialog.py # edits one Case and returns it
@@ -226,21 +225,22 @@ How far the run marches lives in `<GridProperties>` beside `<nt>` and `<CFL>`:
 A run saves a restart file when the case asks for one:
 
 ```xml
-<WriteCheckpointFrequency>200</WriteCheckpointFrequency>
+<CheckpointFormat>VTK</CheckpointFormat>
+<CheckpointFrequency>200</CheckpointFrequency>
 ```
 
-That writes `Checkpoint_200.npz`, `Checkpoint_400.npz` and so on into the run folder, and one `Checkpoint_Final.npz` beside the last field file. Each one holds the whole domain, the completed step count, the simulated time, the step size and the case that produced them. An interval of -1 writes none at all.
+That writes `Checkpoint_200.vtr`, `Checkpoint_400.vtr` and so on into the run folder, followed by `Checkpoint_Final.vtr`. Selecting CSV writes the same checkpoints with `.csv` suffixes. Both formats hold the whole domain, the completed step count, the simulated time, the step size and the case that produced them. An interval of -1 writes none at all.
 
 Continue from one with `--resume`:
 
 ```bash
-uv run mpiexec -n 8 exaflow run --resume ~/Documents/ExaFlow/2026-08-31_120000_input_template/Checkpoint_400.npz
+uv run mpiexec -n 8 exaflow run --resume ~/Documents/ExaFlow/2026-08-31_120000_input_template/Checkpoint_400.vtr
 ```
 
 The command names no case file, because the checkpoint carries its own. Nothing in the file records a decomposition, so a run checkpointed at two ranks continues at one or at eight. `nt` is the step budget of the whole run counted from time zero, so a file at step 400 of 1000 has 600 steps left, and a finished run continues only under a case that raises the budget:
 
 ```bash
-uv run mpiexec -n 4 exaflow run --resume Checkpoint_1000.npz --case longer_run.xml
+uv run mpiexec -n 4 exaflow run --resume Checkpoint_1000.vtr --case longer_run.xml
 ```
 
 That case replaces the stored one and has to describe the same grid shape. A continued run writes its own folder, carries on the step labels from where it started, and writes the restored state under the label `Resumed` rather than `Original`. The GUI does the same through its **Resume…** button.
@@ -278,7 +278,7 @@ Build the session yourself to stop between steps. It holds `state`, `step_index`
 - `moving_block_3d.xml` is the same setup in a periodic 3D box, marched 2 s, with a block that moves along x alone. The block sits in the corner the default camera faces, because the viewer draws the outer surface of a 3D result. Use **Slice** to look inside.
 - `channel_inflow_3d.xml` marches 6 s of flow through a channel with an inflow face, an outflow face and four no-slip walls. The channel starts with a swirl, and the inflow enters at an angle, so once the swirl has washed out the flow leans toward two walls and leaves slow fluid along the other two.
 
-On four processes the 2D case takes about 10 seconds in the GUI and each 3D case about 16, and each streams 40 to 50 frames to the viewer. Every frame is also a `.vtr` file, so one run writes 130 to 360 MB under the output root.
+On four processes the 2D case takes about 10 seconds in the GUI and each 3D case about 16, and each streams 40 to 50 frames to the viewer. The shipped presets keep checkpointing disabled, so those live frames do not fill the output root with copies on disk.
 
 The same file runs from the command line:
 
@@ -354,7 +354,7 @@ What the suite holds:
 | `test_numerics.py` | the operators against analytic answers, the time step limits, and the convergence order of each scheme |
 | `test_ghost_exchange.py` | the serial periodic copy, and the periodic wrap under `mpiexec` |
 | `test_pressure_poisson.py` | the operator symmetry, and that the residual divergence falls at second order |
-| `test_io.py`, `test_csv_loader.py` | the CSV format, the atomic write, the run folder, and the loader the GUI reads with |
+| `test_io.py`, `test_csv_loader.py` | the writer hierarchy, CSV formatting, atomic writes, the run folder, and the GUI loader |
 | `test_session.py` | the position of a run, the end time, the output schedule, and the rank-count independence of a whole run and of a restarted one |
 | `test_checkpoint.py` | the restart format, and that a stopped and continued run reaches the state the whole run reaches |
 | `test_run.py`, `test_cli.py` | the typed run core and the standard console entry point under one or more MPI processes |
@@ -367,7 +367,7 @@ For a numerical change, also compare output against a run made before it:
 EXAFLOW_OUTPUT_ROOT=/tmp/before uv run mpiexec -n 4 exaflow run --case examples/input_template.xml
 # make the change
 EXAFLOW_OUTPUT_ROOT=/tmp/after uv run mpiexec -n 4 exaflow run --case examples/input_template.xml
-cmp /tmp/before/*/Final_Total.csv /tmp/after/*/Final_Total.csv
+cmp /tmp/before/*/Checkpoint_Final.csv /tmp/after/*/Checkpoint_Final.csv
 ```
 
 A refactor that should not change the numbers gives byte-identical files. Run it at more than one rank count, because a decomposition fault only shows up in parallel.
@@ -404,8 +404,8 @@ Two details keep MPI working inside the bundle:
 - Explicit RK time stepping (orders 1-3), each verified at its design order
 - MPI domain decomposition and ghost exchange, verified rank-count independent
 - All boundary condition types (except time-dependent)
-- CSV and VTK output, one format per run folder
-- 374 tests, and `uv run mypy src tests` reporting no issues
+- Readable CSV and binary VTK restart checkpoints, one format per run folder
+- 378 tests, and both documented mypy scopes reporting no issues
 
 **In progress:**
 - Pressure projection (Poisson solver for incompressibility)
