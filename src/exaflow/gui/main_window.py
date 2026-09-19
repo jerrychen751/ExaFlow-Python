@@ -94,6 +94,7 @@ class MainWindow(QtWidgets.QMainWindow):
         params_row.addWidget(self._params_status, 1)
         form.addRow("Case", params_row)
 
+        # Find all presets in repo src and places path in preset dropdown item
         self._preset_input = QtWidgets.QComboBox(controls)
         self._preset_input.addItem("Custom")
         for preset_path in sorted(Path(str(files("exaflow.gui").joinpath("presets"))).glob("*.xml")):
