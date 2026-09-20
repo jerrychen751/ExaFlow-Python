@@ -7,11 +7,11 @@ import math
 @dataclass(frozen=True, slots=True)
 class Fluid:
     """
-    Constant properties of the working fluid. `rho` is density in kg/m^3 and must be finite and positive. `nu` is kinematic viscosity in m^2/s; zero is allowed and makes the viscous term vanish.
+    Constant properties of the working fluid.
     """
 
-    rho: float
-    nu: float
+    rho: float  # density in kg/m^3; finite and positive
+    nu: float  # kinematic viscosity in m^2/s; zero is allowed and makes the viscous term vanish
 
     def __post_init__(self) -> None:
         if not math.isfinite(self.rho) or self.rho <= 0.0:

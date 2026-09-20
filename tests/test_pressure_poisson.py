@@ -242,7 +242,7 @@ def test_the_residual_divergence_falls_at_second_order() -> None:
 
 def project_a_shear_flow(points: int) -> tuple[float, float]:
     """
-    Run one projection over a fixed physical square at `points` points per axis, and return the largest divergence before it and afterwards over the region whose stencil reads corrected values only. The field is fixed in metres, so a finer grid resolves the same flow and the pair of numbers is comparable across calls.
+    Run one projection over a fixed physical square at `points` points per axis, and return the largest divergence before it and afterwards over the region whose stencil reads corrected values only. The field is fixed in meters, so a finer grid resolves the same flow and the pair of numbers is comparable across calls.
     """
 
     case = Case(

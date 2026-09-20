@@ -62,7 +62,7 @@ def qt_application() -> QtWidgets.QApplication:
 @pytest.fixture(scope="session")
 def build_case() -> Callable[..., Case]:
     """
-    Return a factory that builds a valid Case of the given shape. The extent is 1.0 metre per axis and the spacing therefore follows the point count. Pass any Case field by keyword to replace the default.
+    Return a factory that builds a valid Case of the given shape. The extent is 1.0 meter per axis and the spacing therefore follows the point count. Pass any Case field by keyword to replace the default.
     """
 
     def make(shape: tuple[int, ...] = (8, 8, 8), **overrides: object) -> Case:

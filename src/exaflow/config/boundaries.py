@@ -42,12 +42,12 @@ def collect_faces(dimension: int) -> tuple[Face, ...]:
 @dataclass(frozen=True, slots=True)
 class FaceCondition:
     """
-    The boundary condition on one face, together with the values that condition needs. `velocity` holds the prescribed components in axis order and is read only when `kind` is INFLOW; it must then be as long as the case dimension. `pressure` holds the prescribed value and is read only when `kind` is OUTFLOW.
+    The boundary condition on one face, together with the values that condition needs.
     """
 
     kind: BoundaryCondition = BoundaryCondition.NO_SLIP
-    velocity: tuple[float, ...] = ()
-    pressure: float = 0.0
+    velocity: tuple[float, ...] = ()  # prescribed components in axis order; read only when kind is INFLOW, and then as long as the case dimension
+    pressure: float = 0.0  # prescribed value; read only when kind is OUTFLOW
 
     def __post_init__(self) -> None:
         if self.kind == BoundaryCondition.TIME_DEPENDENT:

@@ -13,12 +13,12 @@ from .mpi.subdomain import Subdomain
 @dataclass(frozen=True, slots=True)
 class TimeLevel:
     """
-    Where a run had reached when a state was taken. `step_index` counts completed steps from time zero, `current_time` is the simulated time in seconds at that step, and `dt` is the size in seconds the run marches at. Every file a run writes carries these three values, and a restart reads them back and marches on at `dt`. A run that stops on an end time cuts its last step to the time that is left; `dt` still reports the size the run marches at, because a restart that took the cut size would keep it for every later step.
+    Where a run had reached when a state was taken. Every file a run writes carries these three values, and a restart reads them back and marches on at `dt`. A run that stops on an end time cuts its last step to the time that is left; `dt` still reports the size the run marches at, because a restart that took the cut size would keep it for every later step.
     """
 
-    step_index: int
-    current_time: float
-    dt: float
+    step_index: int  # completed steps, counted from time zero
+    current_time: float  # simulated time in seconds at step_index
+    dt: float  # step size in seconds the run marches at
 
 
 @dataclass(slots=True)
@@ -26,11 +26,11 @@ class FlowState:
     """
     The velocity and pressure fields one rank holds at one time level, including ghost layers.
 
-    `velocity` has shape (dimension, *padded_shape); component `a` is the velocity along axis `a`, and each component is a contiguous slab. `pressure` has shape (padded_shape). Both are float64. Callers mutate these arrays in place, so a state handed to an operator as a source must not be the same object as the destination.
+    Both arrays are float64. Callers mutate these arrays in place, so a state handed to an operator as a source must not be the same object as the destination.
     """
 
-    velocity: np.ndarray
-    pressure: np.ndarray
+    velocity: np.ndarray  # (dimension, *padded_shape); component a is the velocity along axis a, and each component is a contiguous slab
+    pressure: np.ndarray  # (*padded_shape,)
 
     @property
     def dimension(self) -> int:

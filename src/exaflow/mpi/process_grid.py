@@ -45,13 +45,9 @@ def choose_process_grid(num_procs: int, shape: tuple[int, ...], num_ghost_layers
 
 @dataclass(frozen=True, slots=True)
 class ProcessGrid:
-    """
-    How the MPI ranks are arranged over the domain axes. `counts` holds the number of ranks along each axis, in axis order, and multiplies to the communicator size.
+    """How the MPI ranks are arranged over the domain axes."""
 
-    Rank numbering runs with x fastest: rank = cx + px * cy + px * py * cz. Nothing here creates an MPI Cartesian communicator; the mapping is plain arithmetic, so it works with any communicator.
-    """
-
-    counts: tuple[int, ...]
+    counts: tuple[int, ...]  # ranks along each axis, in axis order; multiplies to the communicator size
 
     def __post_init__(self) -> None:
         if not self.counts or any(count < 1 for count in self.counts):

@@ -7,14 +7,14 @@ import math
 @dataclass(frozen=True, slots=True)
 class Grid:
     """
-    The global structured grid. `shape` holds the number of grid points per axis as (nx, ny, nz), and its length fixes the dimension of the whole case. `extent` holds the physical span per axis in metres, in the same axis order. `num_ghost_layers` is the pad depth added at each end of every axis of a rank-local array.
+    The global structured grid.
 
     A grid point sits on both ends of each span, so spacing is extent / (points - 1). Every axis therefore needs at least two points.
     """
 
-    shape: tuple[int, ...]
-    extent: tuple[float, ...]
-    num_ghost_layers: int = 1
+    shape: tuple[int, ...]  # (nx, ny, nz) grid points per axis; its length fixes the dimension of the whole case
+    extent: tuple[float, ...]  # physical span per axis in meters, in the same axis order as shape
+    num_ghost_layers: int = 1  # pad depth added at each end of every axis of a rank-local array
 
     def __post_init__(self) -> None:
         if len(self.shape) not in (1, 2, 3):
@@ -36,7 +36,7 @@ class Grid:
     @property
     def spacing(self) -> tuple[float, ...]:
         """
-        Grid spacing per axis in metres, as (dx, dy, dz) truncated to the dimension of this grid.
+        Grid spacing per axis in meters, as (dx, dy, dz) truncated to the dimension of this grid.
         """
 
         return tuple(span / float(count - 1) for span, count in zip(self.extent, self.shape))

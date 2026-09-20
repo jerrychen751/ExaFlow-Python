@@ -17,12 +17,12 @@ class UniformValue:
 @dataclass(frozen=True, slots=True)
 class StepValue:
     """
-    Add `magnitude` inside an axis-aligned box and nothing outside it. `start` and `end` give the box bounds per axis as fractions of that axis span, both inclusive, each within [0, 1] and with start <= end.
+    Add a constant inside an axis-aligned box and nothing outside it.
     """
 
-    magnitude: float
-    start: tuple[float, ...]
-    end: tuple[float, ...]
+    magnitude: float  # the constant added inside the box
+    start: tuple[float, ...]  # low box bound per axis as a fraction of that axis span, inclusive, within [0, 1]
+    end: tuple[float, ...]  # high box bound per axis as a fraction of that axis span, inclusive, within [0, 1] and >= start
 
     def __post_init__(self) -> None:
         if len(self.start) != len(self.end):
@@ -42,8 +42,8 @@ FieldInitial: TypeAlias = tuple[UniformValue | StepValue, ...]
 @dataclass(frozen=True, slots=True)
 class InitialConditions:
     """
-    The starting field for each quantity, given as contributions that are summed in order. `velocity` holds one entry per axis, in axis order. An empty tuple leaves that quantity at zero.
+    The starting field for each quantity, given as contributions that are summed in order. An empty tuple leaves that quantity at zero.
     """
 
     pressure: FieldInitial = ()
-    velocity: tuple[FieldInitial, ...] = ()
+    velocity: tuple[FieldInitial, ...] = ()  # one entry per axis, in axis order
