@@ -2,6 +2,14 @@
 
 A Python solver for the incompressible Navier-Stokes equations in 1D, 2D, and 3D with MPI parallelization.
 
+<p align="center">
+  <img src="docs/demo.gif" alt="ExaFlow GUI showing a three-dimensional fluid simulation changing over time." width="900">
+</p>
+
+<p align="center">
+  <em>A 3D simulation updating in the ExaFlow GUI as the solver runs.</em>
+</p>
+
 It simulates how fluids (like air or water) move through space over time. The Navier-Stokes equations describe fluid motion through three physical effects:
 
 - **Convection** - fluid carries momentum along with its flow
