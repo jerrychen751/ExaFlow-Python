@@ -20,6 +20,10 @@ class SimulationSession:
     """
     One run in progress on this rank. The session owns everything that belongs to a run rather than to the problem: the communicator, the decomposition, the fields, how far the run has gone, the stage buffers and the output schedule. The case itself stays frozen throughout.
 
+    The session writes files only when it is given `output_directory`, and it never picks a directory by itself. Without one, the constructor raises ValueError for a case with a checkpoint interval, so a case run this way needs `<CheckpointFrequency>-1</CheckpointFrequency>`, and `save_checkpoint` raises. The `~/Documents/ExaFlow/<date>_<label>` folders come from `exaflow run`, which builds one with `create_run_directory` and passes it in. Without `stream_port`, no viewer receives the fields.
+
+    Without `checkpoint_path`, the run starts at step 0 from the initial conditions of the case. With it, the run continues from that checkpoint, and `checkpoint` may carry the file rank 0 already read so that it is not read twice. Without `comm`, this process owns the whole grid.
+
     `state`, `step_index`, `current_time` and `dt` move together, so a caller that stops between steps can read where the run is. `advance_one_step` replaces `state`, so a reference kept across a step points at a stage buffer the next step overwrites.
 
     Every method is collective. Build the session on every rank with the same case, and call the same methods on every rank in the same order.
