@@ -25,9 +25,9 @@ from exaflow.config import (
 )
 
 
-def test_grid_spacing_places_a_point_on_each_end() -> None:
-    grid = Grid((5, 3), (1.0, 2.0), 1)
-    assert grid.spacing == (0.25, 1.0)
+def test_grid_spacing_divides_each_extent_into_equal_cells() -> None:
+    grid = Grid((5, 4), (1.0, 2.0), 1)
+    assert grid.spacing == (0.2, 0.5)
     assert grid.dimension == 2
 
 
@@ -210,7 +210,6 @@ def test_an_inflow_face_on_an_axis_the_case_does_not_have_is_ignored(build_case:
 @pytest.mark.parametrize(
     "overrides,message",
     [
-        (dict(include_pressure=True), "Pressure projection"),
         (dict(convection_scheme="QUICK"), "convection_scheme"),
         (dict(viscous_scheme="Compact"), "viscous_scheme"),
     ],

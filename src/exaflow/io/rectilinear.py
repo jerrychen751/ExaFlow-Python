@@ -13,7 +13,7 @@ def build_rectilinear_grid(
     components: list[np.ndarray],
     pressure: np.ndarray,
 ) -> pv.RectilinearGrid:
-    axes = [np.linspace(0.0, float(span), int(count)) for span, count in zip(grid.extent, grid.shape)]
+    axes = [(np.arange(int(count)) + 0.5) * float(span) / int(count) for span, count in zip(grid.extent, grid.shape)]
     while len(axes) < 3:
         axes.append(np.array([0.0], dtype=float))
     padded = pressure.shape + (1,) * (3 - pressure.ndim)

@@ -58,23 +58,29 @@ class TimeIntegrator:
             case 1:
                 self._spatial.evaluate(state, self._rate)
                 self._next.set_sum(state, self._rate, dt)
+                self._spatial.project(self._next, dt)
             case 2:
                 stage = self._require_stage()
                 self._spatial.evaluate(state, self._rate)
                 stage.set_sum(state, self._rate, 0.5 * dt)
+                self._spatial.project(stage, 0.5 * dt)
                 self._spatial.evaluate(stage, self._rate)
                 self._next.set_sum(state, self._rate, dt)
+                self._spatial.project(self._next, dt)
             case _:
                 stage = self._require_stage()
                 self._spatial.evaluate(state, self._rate)
                 stage.set_sum(state, self._rate, dt)
+                self._spatial.project(stage, dt)
 
                 self._spatial.evaluate(stage, self._rate)
                 self._next.set_sum(stage, self._rate, dt)
+                self._spatial.project(self._next, dt)
                 stage.set_blend(state, self._next, 0.25)
 
                 self._spatial.evaluate(stage, self._rate)
                 self._next.set_sum(stage, self._rate, dt)
+                self._spatial.project(self._next, dt)
                 self._next.set_blend(state, self._next, 2.0 / 3.0)
 
         state, self._next = self._next, state

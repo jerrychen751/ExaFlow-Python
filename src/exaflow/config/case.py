@@ -25,10 +25,6 @@ class SolverOptions:
     viscous_scheme: str = "CentralDifference"
 
     def __post_init__(self) -> None:
-        if self.include_pressure:
-            raise NotImplementedError(
-                "Pressure projection is not wired into the time loop yet. Set include_pressure=False."
-            )
         if self.convection_scheme != "Upwind":
             raise NotImplementedError(
                 f"convection_scheme must be 'Upwind'; {self.convection_scheme!r} is not implemented."

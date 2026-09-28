@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .boundary_application import initialize_boundaries
+from .boundary_application import update_boundaries
 from .config.case import Case
 from .fields import FlowState, TimeLevel, build_initial_state
 from .io.checkpoint import Checkpoint, scatter_checkpoint
@@ -76,7 +76,7 @@ class SimulationSession:
                 comm,
                 checkpoint=checkpoint,
             )
-            initialize_boundaries(self.state, case, self.subdomain)
+            update_boundaries(self.state, case, self.subdomain)
             self.step_index = level.step_index
             self.current_time = level.current_time
             self.dt = level.dt
@@ -93,7 +93,7 @@ class SimulationSession:
         """
 
         state = build_initial_state(self.case, self.subdomain)
-        initialize_boundaries(state, self.case, self.subdomain)
+        update_boundaries(state, self.case, self.subdomain)
         return state
 
     def choose_time_step(self) -> float:

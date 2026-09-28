@@ -240,7 +240,7 @@ def test_the_stream_writer_sends_the_whole_domain_with_its_level(
     grid = received[0]
     assert isinstance(grid, pv.RectilinearGrid)
     assert grid.dimensions == (4, 3, 1)
-    assert grid.bounds == (0.0, 1.0, 0.0, 1.0, 0.0, 0.0)
+    assert grid.bounds == pytest.approx((0.125, 0.875, 1 / 6, 5 / 6, 0.0, 0.0))
     assert np.asarray(grid.point_data["pressure"]).reshape(3, 4).T.tolist() == np.arange(12.0).reshape(4, 3).tolist()
     assert np.asarray(grid.point_data["velocity"]).shape == (12, 3)
     assert int(grid.field_data["StepIndex"][0]) == 4

@@ -7,6 +7,7 @@ from typing import Callable
 import numpy as np
 import pytest
 
+from exaflow.boundary_application import update_boundaries
 from exaflow.config import (
     Boundaries,
     BoundaryCondition,
@@ -40,8 +41,9 @@ def moving_case(build_case: Callable[..., Case]) -> Case:
 def test_a_serial_run_stays_finite_and_respects_the_inflow(moving_case: Case) -> None:
     session = SimulationSession(moving_case)
     state = session.run_until_complete()
+    update_boundaries(state, moving_case, session.subdomain)
     assert np.all(np.isfinite(state.velocity))
-    assert np.allclose(state.velocity[0][0, 1:-1, 1:-1], 2.0)
+    assert np.allclose(0.5 * (state.velocity[0][0, 1:-1, 1:-1] + state.velocity[0][1, 1:-1, 1:-1]), 2.0)
 
 
 def test_a_session_with_no_destination_writes_nothing(moving_case: Case) -> None:
@@ -289,7 +291,8 @@ def test_vtk_output_pads_a_case_below_three_axes(
 
     mesh = pyvista.read(str(tmp_path / "Checkpoint_Final.vtr"))
     assert mesh.dimensions == (*shape, *(1,) * (3 - len(shape)))
-    assert mesh.bounds[: 2 * len(shape)] == pytest.approx([bound for span in extent for bound in (0.0, span)])
+    centers = [(0.5 * span / count, span - 0.5 * span / count) for span, count in zip(extent, shape)]
+    assert mesh.bounds[: 2 * len(shape)] == pytest.approx([bound for pair in centers for bound in pair])
     assert sorted(mesh.point_data.keys()) == ["pressure", "velocity"]
 
 

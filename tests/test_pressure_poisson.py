@@ -1,19 +1,26 @@
 """
-The projection solver is not wired into the time loop; SolverOptions refuses include_pressure until it is. These tests hold the contract its docstrings state, so the term arrives with the behaviour its caller was promised.
+The time loop runs the projection solver after every Runge-Kutta stage when include_pressure is set. These tests hold the contract its docstrings state, so the term behaves as its caller was promised.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Callable
 
 import numpy as np
 import pytest
 
-from exaflow.config import Case, Fluid, Grid, TimeControl
+from exaflow.config import (
+    Boundaries, BoundaryCondition, Case, FaceCondition, Fluid, Grid,
+    InitialConditions, SolverOptions, StepValue, TimeControl, UniformValue,
+)
 from exaflow.fields import FlowState, allocate_state
+from exaflow.io.checkpoint import read_checkpoint
+from exaflow.mpi.ghost_exchange import GhostExchange
 from exaflow.mpi.process_grid import ProcessGrid
 from exaflow.mpi.subdomain import Subdomain
 from exaflow.numerics.pressure_poisson import PoissonSolver
+from exaflow.session import SimulationSession
 
 TIME_STEP = 0.25
 
@@ -51,16 +58,65 @@ def test_the_operator_is_symmetric_and_singular(
     shape: tuple[int, ...],
 ) -> None:
     """
-    This reads the assembled matrix, which no caller needs and nothing else exposes. Conjugate gradient assumes a symmetric positive semi-definite matrix, and a wrong end row breaks that quietly: the run still returns an answer. A zero normal gradient on every face makes every row sum to zero, which is the same statement as the constant vector lying in the nullspace.
+    This assembles the matrix column by column from the stencil, which no caller needs and nothing else exposes. Conjugate gradient assumes a symmetric positive semi-definite matrix, and a wrong end row breaks that quietly: the run still returns an answer. A zero normal gradient on every face makes every row sum to zero, which is the same statement as the constant vector lying in the nullspace.
     """
 
-    solver, _ = build_poisson_solver(shape)
-    operator = solver._operator.toarray()
+    solver, subdomain = build_poisson_solver(shape)
+    operator = assemble_operator(solver, subdomain)
 
     assert np.array_equal(operator, operator.T)
     assert np.allclose(operator.sum(axis=1), 0.0)
     assert np.linalg.eigvalsh(operator).min() == pytest.approx(0.0, abs=1e-9)
     assert np.linalg.eigvalsh(operator).max() > 0.0
+
+
+def assemble_operator(solver: PoissonSolver, subdomain: Subdomain) -> np.ndarray:
+    size = int(np.prod(subdomain.shape))
+    columns = []
+    for index in range(size):
+        unit = np.zeros(size)
+        unit[index] = 1.0
+        column = np.empty(subdomain.shape)
+        solver._apply_operator(unit.reshape(subdomain.shape), column)
+        columns.append(column.ravel())
+    return np.column_stack(columns)
+
+
+@pytest.mark.parametrize(
+    "boundaries,is_singular",
+    [
+        (Boundaries(right=FaceCondition(BoundaryCondition.OUTFLOW, pressure=1.5)), False),
+        (Boundaries(left=FaceCondition(BoundaryCondition.PERIODIC), right=FaceCondition(BoundaryCondition.PERIODIC)), True),
+    ],
+)
+def test_outflow_and_periodic_faces_keep_the_operator_symmetric(
+    build_case: Callable[..., Case],
+    build_subdomain: Callable[..., Subdomain],
+    boundaries: Boundaries,
+    is_singular: bool,
+) -> None:
+    case = build_case((6, 5, 4), boundaries=boundaries)
+    subdomain = build_subdomain(case.grid)
+    operator = assemble_operator(PoissonSolver(case, subdomain), subdomain)
+    smallest = np.linalg.eigvalsh(operator).min()
+
+    assert np.array_equal(operator, operator.T)
+    if is_singular:
+        assert smallest == pytest.approx(0.0, abs=1e-9)
+    else:
+        assert smallest > 1e-6
+
+
+def test_still_fluid_takes_the_outflow_pressure_everywhere(
+    build_case: Callable[..., Case],
+    build_subdomain: Callable[..., Subdomain],
+) -> None:
+    case = build_case((8, 7, 6), boundaries=Boundaries(right=FaceCondition(BoundaryCondition.OUTFLOW, pressure=2.0)))
+    subdomain = build_subdomain(case.grid)
+
+    pressure = PoissonSolver(case, subdomain).solve(allocate_state(subdomain, 3), TIME_STEP)
+
+    assert np.allclose(pressure, 2.0)
 
 
 @pytest.mark.parametrize("shape", [(8,), (8, 7), (8, 7, 6)])
@@ -261,3 +317,105 @@ def project_a_shear_flow(points: int) -> tuple[float, float]:
     before = float(np.abs(solver.compute_divergence(state)[1:-1, 1:-1]).max())
     solver.project(state, TIME_STEP)
     return before, float(np.abs(solver.compute_divergence(state)[1:-1, 1:-1]).max())
+
+
+def test_the_projection_lowers_the_divergence_with_an_outflow_face(
+    build_case: Callable[..., Case],
+    build_subdomain: Callable[..., Subdomain],
+) -> None:
+    case = build_case((12, 11, 10), boundaries=Boundaries(right=FaceCondition(BoundaryCondition.OUTFLOW, pressure=0.0)))
+    subdomain = build_subdomain(case.grid)
+    solver = PoissonSolver(case, subdomain)
+    state = build_swirl(subdomain)
+    state.velocity[2][...] = 0.0
+
+    before = float(np.abs(solver.compute_divergence(state)[1:-1, 1:-1, 1:-1]).max())
+    solver.project(state, TIME_STEP)
+    after = float(np.abs(solver.compute_divergence(state)[1:-1, 1:-1, 1:-1]).max())
+
+    assert after < before / 10.0
+
+
+def test_a_shifted_periodic_flow_gives_a_shifted_pressure(
+    build_case: Callable[..., Case],
+    build_subdomain: Callable[..., Subdomain],
+) -> None:
+    periodic = FaceCondition(BoundaryCondition.PERIODIC)
+    boundaries = Boundaries(front=periodic, back=periodic)
+    case = build_case((6, 5, 12), boundaries=boundaries)
+    subdomain = build_subdomain(case.grid)
+    exchange = GhostExchange(subdomain, boundaries, None)
+    pressures = []
+    for shift in (0, 3):
+        state = allocate_state(subdomain, 3)
+        layer = np.arange(-1, 13) - shift
+        state.velocity[2][...] = (np.sin(2 * np.pi * layer / 12) + 0.3 * np.cos(4 * np.pi * layer / 12))[None, None, :]
+        exchange.start(state)
+        exchange.complete(state)
+        pressures.append(PoissonSolver(case, subdomain).solve(state, TIME_STEP))
+
+    assert np.abs(pressures[0]).max() > 0.1
+    assert np.allclose(pressures[1], np.roll(pressures[0], 3, axis=2), atol=1e-8)
+
+
+def build_channel_case(integration_order: int, include_pressure: bool) -> Case:
+    periodic = FaceCondition(BoundaryCondition.PERIODIC)
+    return Case(
+        fluid=Fluid(1.0, 0.05),
+        grid=Grid((16, 8, 8), (2.0, 1.0, 1.0), 1),
+        time=TimeControl(num_steps=4, cfl=0.3, integration_order=integration_order),
+        boundaries=Boundaries(
+            left=FaceCondition(BoundaryCondition.INFLOW, (1.0, 0.0, 0.0)),
+            right=FaceCondition(BoundaryCondition.OUTFLOW, pressure=0.0),
+            front=periodic,
+            back=periodic,
+        ),
+        initial=InitialConditions(velocity=(
+            (UniformValue(1.0), StepValue(0.5, (0.3, 0.3, 0.0), (0.6, 0.6, 1.0))),
+            (UniformValue(0.0),),
+            (UniformValue(0.0),),
+        )),
+        solver=SolverOptions(include_pressure=include_pressure),
+    )
+
+
+@pytest.mark.parametrize("integration_order", [1, 2, 3])
+def test_a_run_with_pressure_ends_with_less_divergence(integration_order: int) -> None:
+    divergence = []
+    for include_pressure in (False, True):
+        case = build_channel_case(integration_order, include_pressure)
+        session = SimulationSession(case)
+        session.run_until_complete(write_initial=False)
+        measured = PoissonSolver(case, session.subdomain).compute_divergence(session.state)
+        divergence.append(float(np.abs(measured[1:-1, 1:-1, 1:-1]).max()))
+
+    assert np.isfinite(divergence).all()
+    assert divergence[1] < divergence[0] / 5.0
+
+
+@pytest.fixture(scope="module")
+def serial_pressure_output(
+    tmp_path_factory: pytest.TempPathFactory,
+    run_under_mpiexec: Callable[..., None],
+) -> Path:
+    directory = tmp_path_factory.mktemp("serial_pressure")
+    run_under_mpiexec("_run_pressure_case.py", 1, str(directory))
+    return directory / "Checkpoint_Final.csv"
+
+
+@pytest.mark.mpi
+@pytest.mark.slow
+@pytest.mark.parametrize("num_procs", [2, 4])
+def test_a_pressure_run_matches_across_rank_counts(
+    tmp_path: Path,
+    run_under_mpiexec: Callable[..., None],
+    serial_pressure_output: Path,
+    num_procs: int,
+) -> None:
+    run_under_mpiexec("_run_pressure_case.py", num_procs, str(tmp_path))
+    serial = read_checkpoint(str(serial_pressure_output))
+    parallel = read_checkpoint(str(tmp_path / "Checkpoint_Final.csv"))
+
+    assert np.allclose(parallel.velocity, serial.velocity, rtol=0.0, atol=1e-10)
+    assert np.allclose(parallel.pressure, serial.pressure, rtol=0.0, atol=1e-10)
+    assert np.abs(serial.pressure).max() > 0.1

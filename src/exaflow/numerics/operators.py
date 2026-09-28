@@ -9,6 +9,7 @@ from ..mpi.ghost_exchange import GhostExchange
 from ..mpi.subdomain import Subdomain
 from .convection import Convection
 from .diffusion import Diffusion
+from .pressure_poisson import PoissonSolver
 
 if TYPE_CHECKING:
     from mpi4py.MPI import Intracomm
@@ -47,6 +48,7 @@ class SpatialOperator:
         self._subdomain = subdomain
         self._exchange = GhostExchange(subdomain, case.boundaries, comm)
         self._operators = build_operators(case, subdomain)
+        self._poisson = PoissonSolver(case, subdomain, comm) if case.solver.include_pressure else None
 
     def evaluate(self, state: FlowState, rate: FlowState) -> None:
         """
@@ -55,8 +57,17 @@ class SpatialOperator:
 
         rate.velocity.fill(0.0)
         rate.pressure.fill(0.0)
+        self._refresh_ghost_layers(state)
+        for operator in self._operators:
+            operator.accumulate(state, rate)
+
+    def project(self, state: FlowState, dt: float) -> None:
+        if self._poisson is None:
+            return
+        self._refresh_ghost_layers(state)
+        self._poisson.project(state, dt)
+
+    def _refresh_ghost_layers(self, state: FlowState) -> None:
         self._exchange.start(state)
         self._exchange.complete(state)
         update_boundaries(state, self._case, self._subdomain)
-        for operator in self._operators:
-            operator.accumulate(state, rate)

@@ -9,7 +9,7 @@ class Grid:
     """
     The global structured grid.
 
-    A grid point sits on both ends of each span, so spacing is extent / (points - 1). Every axis therefore needs at least two points.
+    Each grid point is the center of one of `points` equal cells that tile the span, so spacing is extent / points and a domain face lies half a spacing beyond the outermost point. Every axis needs at least two points.
     """
 
     shape: tuple[int, ...]  # (nx, ny, nz) grid points per axis; its length fixes the dimension of the whole case
@@ -39,4 +39,4 @@ class Grid:
         Grid spacing per axis in meters, as (dx, dy, dz) truncated to the dimension of this grid.
         """
 
-        return tuple(span / float(count - 1) for span, count in zip(self.extent, self.shape))
+        return tuple(span / float(count) for span, count in zip(self.extent, self.shape))

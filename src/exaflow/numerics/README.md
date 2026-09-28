@@ -58,8 +58,8 @@ Register it in `build_operators` in `operators.py`.
 
 ## Modules
 
-- `operators.py` - the `Operator` protocol, `build_operators`, and `SpatialOperator`, which sequences the ghost exchange, the boundary refresh and the terms
+- `operators.py` - the `Operator` protocol, `build_operators`, and `SpatialOperator`, which sequences the ghost exchange, the boundary refresh and the terms, and runs the pressure projection
 - `convection.py` - first-order upwind `(u dot grad) u`
 - `diffusion.py` - second-order central `nu * laplacian(u)`
 - `time_step.py` - `TimeIntegrator`, Runge-Kutta orders 1 to 3
-- `pressure_poisson.py` - Chorin projection, **single rank only and not wired into the time loop**; `SolverOptions` rejects `include_pressure=True` until it is
+- `pressure_poisson.py` - Chorin projection, solved by a stencil conjugate gradient that runs on every rank; `SpatialOperator.project` runs it after every Runge-Kutta stage when `include_pressure` is set

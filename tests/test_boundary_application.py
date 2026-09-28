@@ -5,7 +5,7 @@ from typing import Callable
 import numpy as np
 import pytest
 
-from exaflow.boundary_application import initialize_boundaries, update_boundaries
+from exaflow.boundary_application import update_boundaries
 from exaflow.config import Boundaries, BoundaryCondition, Case, FaceCondition, Grid
 from exaflow.fields import FlowState, allocate_state
 from exaflow.mpi.process_grid import ProcessGrid
@@ -47,7 +47,7 @@ def apply_initial(
         )
         subdomain = build_subdomain(case.grid)
         state = build_filled_state(case, subdomain)
-        initialize_boundaries(state, case, subdomain)
+        update_boundaries(state, case, subdomain)
         return state, subdomain
 
     return run
@@ -58,20 +58,20 @@ def test_a_no_slip_face_stops_every_velocity_component(
 ) -> None:
     state, subdomain = apply_initial(isolate(FaceCondition(BoundaryCondition.NO_SLIP)))
     transverse = subdomain.interior[1]
-    assert np.all(state.velocity[0][0, transverse] == 0.0)
-    assert np.all(state.velocity[1][0, transverse] == 0.0)
+    assert np.all(state.velocity[0][0, transverse] == -FILLER)
+    assert np.all(state.velocity[1][0, transverse] == -FILLER)
 
 
 def test_a_slip_face_stops_only_the_component_normal_to_it(
     apply_initial: Callable[..., tuple[FlowState, Subdomain]],
 ) -> None:
     """
-    A slip wall lets the flow run along it, so the tangential components keep whatever the ghost layer held.
+    A slip wall lets the flow run along it, so the tangential components mirror the first real layer.
     """
 
     state, subdomain = apply_initial(isolate(FaceCondition(BoundaryCondition.SLIP)))
     transverse = subdomain.interior[1]
-    assert np.all(state.velocity[0][0, transverse] == 0.0)
+    assert np.all(state.velocity[0][0, transverse] == -FILLER)
     assert np.all(state.velocity[1][0, transverse] == FILLER)
 
 
@@ -80,8 +80,8 @@ def test_an_inflow_face_writes_each_prescribed_component(
 ) -> None:
     state, subdomain = apply_initial(isolate(FaceCondition(BoundaryCondition.INFLOW, (1.5, -0.5))))
     transverse = subdomain.interior[1]
-    assert np.all(state.velocity[0][0, transverse] == 1.5)
-    assert np.all(state.velocity[1][0, transverse] == -0.5)
+    assert np.all(0.5 * (state.velocity[0][0, transverse] + FILLER) == 1.5)
+    assert np.all(0.5 * (state.velocity[1][0, transverse] + FILLER) == -0.5)
 
 
 def test_an_outflow_face_writes_the_pressure_and_leaves_the_velocity(
@@ -91,7 +91,7 @@ def test_an_outflow_face_writes_the_pressure_and_leaves_the_velocity(
         isolate(FaceCondition(BoundaryCondition.OUTFLOW, pressure=2.25), "right")
     )
     transverse = subdomain.interior[1]
-    assert np.all(state.pressure[-1, transverse] == 2.25)
+    assert np.all(0.5 * (state.pressure[-1, transverse] + FILLER) == 2.25)
     assert np.all(state.velocity[0][-1, transverse] == FILLER)
 
 
@@ -103,12 +103,12 @@ def test_a_periodic_face_is_left_to_the_ghost_exchange(
     assert np.all(state.pressure == FILLER)
 
 
-def test_the_prescribed_value_fills_every_ghost_layer(
+def test_the_prescribed_value_reaches_every_ghost_layer(
     apply_initial: Callable[..., tuple[FlowState, Subdomain]],
 ) -> None:
     state, subdomain = apply_initial(isolate(FaceCondition(BoundaryCondition.INFLOW, (1.5, -0.5))), 3)
     transverse = subdomain.interior[1]
-    assert np.all(state.velocity[0][:3, transverse] == 1.5)
+    assert np.all(state.velocity[0][:3, transverse] == 2 * 1.5 - FILLER)
     assert np.all(state.velocity[0][3, transverse] == FILLER)
 
 
@@ -123,7 +123,7 @@ def test_a_face_this_rank_does_not_own_keeps_the_data_of_its_neighbor(
     subdomain = Subdomain(case.grid, ProcessGrid((2, 1)), 1)
     state = build_filled_state(case, subdomain)
 
-    initialize_boundaries(state, case, subdomain)
+    update_boundaries(state, case, subdomain)
 
     assert np.all(state.velocity[0][0, subdomain.interior[1]] == FILLER)
 
@@ -182,7 +182,6 @@ def test_a_slip_face_copies_the_tangential_velocity_outward_and_keeps_the_normal
     case = build_case((6, 5), boundaries=isolate(FaceCondition(BoundaryCondition.SLIP)))
     subdomain = build_subdomain(case.grid)
     state = allocate_state(subdomain, case.dimension)
-    initialize_boundaries(state, case, subdomain)
     for axis in range(2):
         state.velocity[axis][subdomain.interior] = np.arange(1.0, 31.0).reshape(6, 5)  # (30,) -> (6, 5)
 
@@ -191,15 +190,15 @@ def test_a_slip_face_copies_the_tangential_velocity_outward_and_keeps_the_normal
     transverse = subdomain.interior[1]
     assert np.all(state.velocity[1][0, transverse] == state.velocity[1][1, transverse])
     assert state.velocity[1][0, 1] == 1.0
-    assert np.all(state.velocity[0][0, transverse] == 0.0)
+    assert np.all(state.velocity[0][0, transverse] == -state.velocity[0][1, transverse])
 
 
-def test_the_outward_copy_reaches_every_ghost_layer(
+def test_each_ghost_layer_mirrors_the_real_layer_at_the_same_distance(
     build_case: Callable[..., Case],
     build_subdomain: Callable[..., Subdomain],
 ) -> None:
     """
-    The source span is one layer wide so that it broadcasts over the whole pad. A source as deep as the pad would reverse the layer order.
+    Each ghost layer mirrors the real layer at the same distance from the face, so the layer order reverses across the face.
     """
 
     case = build_case(
@@ -214,5 +213,4 @@ def test_the_outward_copy_reaches_every_ghost_layer(
     update_boundaries(state, case, subdomain)
 
     transverse = subdomain.interior[1]
-    expected = state.pressure[3, transverse]
-    assert all(np.array_equal(state.pressure[layer, transverse], expected) for layer in range(3))
+    assert all(np.array_equal(state.pressure[2 - layer, transverse], state.pressure[3 + layer, transverse]) for layer in range(3))

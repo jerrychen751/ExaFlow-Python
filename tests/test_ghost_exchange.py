@@ -33,6 +33,21 @@ def test_a_periodic_axis_on_one_rank_copies_its_own_opposite_face(
     assert state.velocity[0][-1] == 0.0
 
 
+def test_a_single_array_exchange_wraps_a_periodic_axis(
+    build_subdomain: Callable[..., Subdomain],
+) -> None:
+    subdomain = build_subdomain(Grid((8,), (1.0,), 1))
+    field = np.zeros(subdomain.padded_shape)
+    field[subdomain.interior] = np.arange(8.0)
+    exchange = GhostExchange(subdomain, Boundaries(left=PERIODIC, right=PERIODIC), None, num_arrays=1)
+
+    exchange.start_arrays((field,))
+    exchange.complete_arrays((field,))
+
+    assert field[0] == 7.0
+    assert field[-1] == 0.0
+
+
 def test_the_exchange_carries_pressure_as_well_as_velocity(
     build_subdomain: Callable[..., Subdomain],
 ) -> None:
