@@ -176,7 +176,7 @@
       <IncludeViscousEffects>True</IncludeViscousEffects>
       <ViscousScheme>CentralDifference</ViscousScheme>
       <TimeIntegrationOrder>1</TimeIntegrationOrder>
-      <IncludePressureEffects>False</IncludePressureEffects>
+      <IncludePressureEffects>True</IncludePressureEffects>
     </SolverProperties>
     <OutputProperties>
       <CheckpointFormat>CSV</CheckpointFormat>
