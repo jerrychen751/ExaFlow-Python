@@ -25,6 +25,7 @@ def time_advance(inputs: KernelInputs, order: int, warmup: int, repeats: int) ->
 
     times = []
     for _ in range(repeats):
+        state = inputs.state.copy()
         start = time.perf_counter()
         state = integrator.advance(state, inputs.dt)
         times.append(time.perf_counter() - start)
