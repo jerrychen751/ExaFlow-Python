@@ -1,3 +1,8 @@
+"""
+_run_conjugate_gradient() seems to be taking a very long time inside of PoissonSolver's solve() method, because it runs through a for loop for 10 * num_cells.
+"""
+
+
 import argparse
 import statistics
 import time

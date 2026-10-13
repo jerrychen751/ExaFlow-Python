@@ -20,7 +20,7 @@ The project uses [uv](https://docs.astral.sh/uv/). One command builds the whole 
 uv sync
 ```
 
-This creates `.venv`, installs Python 3.13 (the version in `.python-version`), installs every dependency, and installs ExaFlow itself in editable mode. On macOS and Linux nothing else is needed. Open MPI arrives as a Python wheel, so you do not install MPI through Homebrew or conda. `uv.lock` pins every exact version.
+This creates `.venv`, installs Python 3.13 (the version in `.python-version`), installs every dependency, and installs ExaFlow itself in editable mode. It also compiles the C++ extension in `cpp/`, which needs a C++23 compiler: the Xcode Command Line Tools on macOS (`xcode-select --install`), or Build Tools for Visual Studio with the "Desktop development with C++" workload on Windows. Beyond the compiler, macOS and Linux need nothing else. Open MPI arrives as a Python wheel, so you do not install MPI through Homebrew or conda. `uv.lock` pins every exact version.
 
 Open MPI has no Windows build, so on Windows `uv sync` leaves it out and you install Microsoft MPI once, before the first run:
 
@@ -125,6 +125,13 @@ src/exaflow/
         sim_parameters_dialog.py # edits one Case and returns it
         presets/ # the case files the Preset box lists
         streaming/ # sends fields from a running job to the viewer
+cpp/ # the C++ behind exaflow._kernels; cpp/README.md covers the layout, the tests and the portability rules
+    include/exaflow/ # headers the kernel library exposes
+    src/ # the kernel library: plain C++ with no Python in it
+    bindings/module.cpp # the pybind11 wrapper, and the only file that includes a Python header
+    stubs/exaflow/_kernels.pyi # type stub for the compiled extension; the C++ itself is in cpp/
+    tests/ # GoogleTest setup for the kernel library
+CMakeLists.txt # what scikit-build-core hands to CMake during uv sync
 examples/ # the typed Python API example and the input XML template
 Simulations/ # scaffold script for a new simulation directory
 tests/ # pytest suite, one module per source module, plus conftest.py and the two mpiexec helper scripts
@@ -285,7 +292,7 @@ The scaffold writes `build/in/input.xml` and a metadata file with the standard c
 
 ## Developing
 
-The editable install means an edit under `src/` takes effect on the next run. You do not reinstall, and you do not set `PYTHONPATH`.
+The editable install means an edit under `src/` takes effect on the next run. You do not reinstall, and you do not set `PYTHONPATH`. An edit under `cpp/` has to be compiled first, and the next `uv sync` or `uv run` does that. Every change has to work on macOS and on Windows; `cpp/README.md` lists where the two compilers differ.
 
 ### Add a dependency
 
@@ -348,6 +355,7 @@ What the suite holds:
 | `test_run.py`, `test_cli.py` | the typed run core and the standard console entry point under one or more MPI processes |
 | `test_main_window.py`, `test_simulation_runner.py`, `test_simulation_scaffold.py` | the GUI window, the GUI child command and the case-only simulation scaffold |
 | `test_streaming.py` | the length-prefixed stream between a run and the viewer |
+| `test_kernels.py` | empty placeholder for tests of the compiled extension |
 
 For a numerical change, also compare output against a run made before it:
 

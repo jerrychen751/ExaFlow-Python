@@ -20,6 +20,7 @@ dependencies = [
     "scipy-stubs",
     "pyinstaller",
     "ipykernel",
+    "pybind11>=3.1.0",
 ]
 
 [tool.pytest.ini_options]
@@ -37,11 +38,23 @@ markers = [
 exaflow = "exaflow.cli:main"
 
 [build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["scikit-build-core>=0.10", "pybind11>=2.13"]
+build-backend = "scikit_build_core.build"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+cmake.version = ">=3.20"
+wheel.packages = ["src/exaflow"]
 
-[tool.setuptools.package-data]
-exaflow = ["py.typed", "gui/presets/*.xml"]
+[tool.mypy]
+mypy_path = "$MYPY_CONFIG_FILE_DIR/cpp/stubs"
+
+[tool.uv]
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "CMakeLists.txt" },
+    { file = "cpp/**/CMakeLists.txt" },
+    { file = "cpp/**/*.cpp" },
+    { file = "cpp/**/*.hpp" },
+    { file = "cpp/**/*.pyi" },
+]

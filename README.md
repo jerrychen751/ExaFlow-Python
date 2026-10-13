@@ -16,6 +16,8 @@ uv sync
 
 This builds `.venv` with Python 3.13, every dependency, and Open MPI. Start every command below with `uv run`.
 
+`uv sync` also compiles the C++ extension in `cpp/`, so it needs a C++23 compiler: the Xcode Command Line Tools on macOS (`xcode-select --install`), or Build Tools for Visual Studio with the "Desktop development with C++" workload on Windows.
+
 Open MPI has no Windows wheel, so on Windows install Microsoft MPI once and then open a new terminal:
 
 ```powershell
@@ -88,11 +90,12 @@ src/exaflow/
     session.py # the time loop of one run
     run.py # run_case, the Python entry point
     cli.py # the exaflow command
+cpp/ # the C++ extension scaffold for exaflow._kernels, built by CMake during uv sync
 examples/ # the input template and a Python API example
 tests/ # the pytest suite, one module per source module
 ```
 
-Start with `src/exaflow/cli.py` and follow it into `run.py` and `session.py`. Read `src/exaflow/numerics/README.md` before you change a numerical operator.
+Start with `src/exaflow/cli.py` and follow it into `run.py` and `session.py`. Read `src/exaflow/numerics/README.md` before you change a numerical operator, and `cpp/README.md` before you change the C++.
 
 `benchmarks/` holds timing scripts and three case sizes, for example `uv run python benchmarks/whole_simulation.py benchmarks/cases/small_50x50x25.xml`.
 
