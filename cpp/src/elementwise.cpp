@@ -65,7 +65,7 @@ void multiply_elements(const NDArray& x1, double x2, NDArray& out) {
     auto v1 = x1.get_values();
     auto res = out.get_values();
     for (std::size_t i = 0; i < x1.get_size(); ++i) {
-        res[i] = v1[i] / x2;
+        res[i] = v1[i] * x2;
     }
 
     return;
