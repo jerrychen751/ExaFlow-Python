@@ -73,7 +73,7 @@ void divide_elements(const NDArray& x1, const NDArray& x2, NDArray& out) {
     auto res = out.get_values();
     for (std::size_t i = 0; i < x1.get_size(); ++i) {
         // Since these are floats, division by zero is actually not undefined
-        // inf if numerator is positive, -inf if numerator is negative, and nan for 0.0 / 0.0
+        // inf with the sign of numerator times denominator, and nan for 0.0 / 0.0
         res[i] = v1[i] / v2[i];
     }
 }
