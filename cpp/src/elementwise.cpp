@@ -23,8 +23,6 @@ void add_elements(const NDArray& x1, const NDArray& x2, NDArray& out) {
     for (std::size_t i = 0; i < x1.get_size(); ++i) {
         res[i] = v1[i] + v2[i];
     }
-
-    return;
 }
 
 void subtract_elements(const NDArray& x1, const NDArray& x2, NDArray& out) {
@@ -38,8 +36,6 @@ void subtract_elements(const NDArray& x1, const NDArray& x2, NDArray& out) {
     for (std::size_t i = 0; i < x1.get_size(); ++i) {
         res[i] = v1[i] - v2[i];
     }
-
-    return;
 }
 
 void multiply_elements(const NDArray& x1, const NDArray& x2, NDArray& out) {
@@ -53,8 +49,6 @@ void multiply_elements(const NDArray& x1, const NDArray& x2, NDArray& out) {
     for (std::size_t i = 0; i < x1.get_size(); ++i) {
         res[i] = v1[i] * v2[i];
     }
-
-    return;
 }
 
 void multiply_elements(const NDArray& x1, double x2, NDArray& out) {
@@ -67,8 +61,6 @@ void multiply_elements(const NDArray& x1, double x2, NDArray& out) {
     for (std::size_t i = 0; i < x1.get_size(); ++i) {
         res[i] = v1[i] * x2;
     }
-
-    return;
 }
 
 void divide_elements(const NDArray& x1, const NDArray& x2, NDArray& out) {
@@ -84,8 +76,6 @@ void divide_elements(const NDArray& x1, const NDArray& x2, NDArray& out) {
         // inf if numerator is positive, -inf if numerator is negative, and nan for 0.0 / 0.0
         res[i] = v1[i] / v2[i];
     }
-
-    return;
 }
 
 }
