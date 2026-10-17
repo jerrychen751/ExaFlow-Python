@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 project(exaflow_native LANGUAGES CXX)
 
 # `uv sync` and `pip install` reach this file through scikit-build-core, which defines SKBUILD.
-# A plain `cmake -S . -B build/cpp` works too, for building and testing the C++ with no Python.
+# A plain `cmake -S . -B build/cpp` works too, for the C++ tests, once it is pointed at pybind11 (see cpp/README.md).
 option(EXAFLOW_BUILD_PYTHON "Build the exaflow._kernels Python module" ON)
 option(EXAFLOW_BUILD_TESTS "Build the C++ unit tests" OFF)
 
@@ -19,17 +19,19 @@ if(NOT is_multi_config AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
-# 1. The kernel library: plain C++ that knows nothing about Python.
+# The kernels read and write numpy arrays, so every build needs pybind11 and the Python headers.
+set(PYBIND11_FINDPYTHON ON)
+find_package(pybind11 CONFIG REQUIRED)
+
+# 1. The kernel library: the numerical loops, over numpy arrays passed in through pybind11.
 add_library(exaflow_kernels STATIC
     cpp/src/kernels.cpp
-    cpp/src/dot_product.cpp
-    cpp/src/elementwise.cpp
-    cpp/src/laplacian.cpp
-    cpp/src/pressure_operator.cpp
-    cpp/src/conjugate_gradient.cpp
+    cpp/src/vector_operations.cpp
+    cpp/src/pressure_solver.cpp
 )
 add_library(exaflow::kernels ALIAS exaflow_kernels)
 target_include_directories(exaflow_kernels PUBLIC cpp/include)
+target_link_libraries(exaflow_kernels PUBLIC pybind11::pybind11)
 if(MSVC)
     target_compile_options(exaflow_kernels PRIVATE /W4 /permissive-)
 else()
@@ -38,8 +40,6 @@ endif()
 
 # 2. The Python module: a thin pybind11 wrapper around the kernel library.
 if(EXAFLOW_BUILD_PYTHON)
-    set(PYBIND11_FINDPYTHON ON)
-    find_package(pybind11 CONFIG REQUIRED)
     pybind11_add_module(_kernels MODULE cpp/bindings/module.cpp)
     target_link_libraries(_kernels PRIVATE exaflow::kernels)
     # Lands next to the Python sources of the installed package, as exaflow/_kernels.<abi>.so or .pyd.

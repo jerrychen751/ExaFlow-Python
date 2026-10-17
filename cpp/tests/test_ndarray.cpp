@@ -1,4 +1,4 @@
-#include "exaflow/kernels.hpp"
+#include "exaflow/ndarray.hpp"
 
 #include <gtest/gtest.h>
 

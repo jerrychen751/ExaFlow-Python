@@ -1,6 +1,6 @@
 # C++ extension
 
-The C++ extension scaffold imports as `exaflow._kernels`. It exposes the scalar `add_c` example, and nothing in the solver calls it yet. The team kernels have C++ interfaces and implementation placeholders; calling a placeholder throws `std::logic_error` until its numerical implementation is written.
+The C++ extension scaffold imports as `exaflow._kernels`. It exposes the scalar `add_c` example, the `NDArray` class and every team kernel, and nothing in the solver calls them yet. The kernels take float64, C-contiguous numpy arrays and write into the caller's output array in place, with no copy. Python can also allocate an array with `NDArray(shape)`, and `np.asarray` on it returns a numpy view of the same storage with no copy. The team kernels have C++ interfaces and implementation placeholders; calling a placeholder throws `std::logic_error` until its numerical implementation is written.
 
 ## Layout
 
@@ -10,15 +10,12 @@ cpp/
     include/exaflow/ # headers: the declarations other files compile against
         kernels.hpp
         ndarray.hpp
-    src/ # the definitions: plain C++ that never includes a Python header
+    src/ # the definitions, which read and write numpy arrays through pybind11's array_t
         kernels.cpp
-        dot_product.cpp
-        elementwise.cpp
-        laplacian.cpp
-        pressure_operator.cpp
-        conjugate_gradient.cpp
+        vector_operations.cpp
+        pressure_solver.cpp
     bindings/
-        module.cpp # the only file that includes pybind11; initializes the Python module
+        module.cpp # initializes the Python module and names each kernel's arguments
     stubs/exaflow/
         __init__.pyi # package-level types for local stub lookup
         _kernels.pyi # the type stub mypy reads for the compiled module
@@ -28,32 +25,34 @@ cpp/
 tests/test_kernels.py # the pytest module for the compiled module
 ```
 
-There are three layers, and each one knows only the layer below it. The kernel library (`include/` and `src/`) is plain C++ and builds with no Python installed. The bindings expose kernels to Python and hold no numerical logic. The Python package imports `exaflow._kernels` like any other module.
+There are three layers, and each one knows only the layer below it. The kernel library (`include/` and `src/`) takes `pybind11::array_t` arguments, so it compiles against pybind11 and the Python headers. The bindings expose kernels to Python and hold no numerical logic. The Python package imports `exaflow._kernels` like any other module.
 
 The stub lives under `cpp/stubs/`. Mypy and VS Code's Pylance read it from there through the project settings. The local `__init__.pyi` preserves the package's `__version__` export. CMake installs only `_kernels.pyi` beside the compiled module in the Python package.
 
 ## Team kernel base
 
-The shared interfaces are in `include/exaflow/kernels.hpp`. Each task has its own implementation file:
+The shared interfaces are in `include/exaflow/kernels.hpp`. Each task is implemented in one of two files:
 
-- Hemalni: `src/dot_product.cpp`, implementing `compute_dot`.
-- Jerry: `src/elementwise.cpp`, implementing `add_elements`, `subtract_elements`, `multiply_elements`, and `divide_elements`.
-- Miguel: `src/laplacian.cpp`, implementing `apply_laplacian`.
-- Pressure operator: `src/pressure_operator.cpp`, implementing `apply_operator`.
-- Conjugate gradient: `src/conjugate_gradient.cpp`, implementing `solve_conjugate_gradient`.
+- Hemalni: `src/vector_operations.cpp`, implementing `compute_dot`.
+- Jerry: `src/vector_operations.cpp`, implementing `add_elements`, `subtract_elements`, `multiply_elements`, and `divide_elements`.
+- Miguel: `src/pressure_solver.cpp`, implementing `apply_laplacian`.
+- Pressure operator: `src/pressure_solver.cpp`, implementing `apply_operator`.
+- Conjugate gradient: `src/pressure_solver.cpp`, implementing `solve_conjugate_gradient`.
 
-`NDArray` owns a row-major array of doubles with any number of dimensions, so one class holds a vector as `NDArray({n})`, a matrix as `NDArray({rows, cols})`, and a 3D field as `NDArray({nx, ny, nz})`. It supports C++23 indexing with `values[i]`, `values[row, col]` or `values[i, j, k]`, or a span of coordinates. `get_values()` returns a `std::span` view of its storage. The kernels take `NDArray` references, so each argument carries its own shape. The array must outlive the span, and assigning a new array invalidates its existing spans.
+`NDArray` owns a row-major array of doubles with any number of dimensions, so one class holds a vector as `NDArray({n})`, a matrix as `NDArray({rows, cols})`, and a 3D field as `NDArray({nx, ny, nz})`. It supports C++23 indexing with `values[i]`, `values[row, col]` or `values[i, j, k]`, or a span of coordinates. `get_values()` returns a `std::span` view of its storage. The kernels take numpy arrays instead, as `exaflow::NPArray` in `kernels.hpp`, so each argument carries its own shape. The array must outlive the span, and assigning a new array invalidates its existing spans.
 
 For a 3D field, construct `exaflow::NDArray field({nx, ny, nz})`. Values default to zero; a second constructor argument sets the initial value, or a braced list gives every value in storage order. `get_dimension()` returns the number of axes, `get_shape()` returns a read-only span of their lengths, and `get_size()` returns the number of values. The last axis is contiguous, so `(i, j, k)` maps to `(i * ny + j) * nz + k`. The bracket operators check the coordinate count and bounds. Zero-sized axes produce empty storage, an explicitly empty shape is rejected, and a default-constructed array is empty. The array can store more than three dimensions; the Laplacian contract remains limited to 1D–3D.
 
-For example, once elementwise addition is implemented:
+For example, from Python:
 
-```cpp
-exaflow::NDArray first({3}, {1.0, 2.0, 3.0});
-exaflow::NDArray second({3}, {10.0, 20.0, 30.0});
-exaflow::NDArray out({3});
-exaflow::add_elements(first, second, out);
+```python
+first = np.array([1.0, 2.0, 3.0])
+second = np.array([10.0, 20.0, 30.0])
+out = np.empty(3)
+_kernels.add_elements(first, second, out)
 ```
+
+A float32 array or a non-contiguous slice raises `TypeError`. pybind11 would otherwise convert it into a temporary copy, and the kernel's writes would never reach the caller's array.
 
 ### Buffer contracts
 
@@ -64,7 +63,7 @@ exaflow::add_elements(first, second, out);
 - `apply_operator` accepts interior values, an interior output buffer, and a separate reusable padded buffer. It copies the interior into the padded buffer, invokes `fill_ghost_layers`, and applies the negative Laplacian. The callback must use homogeneous pressure boundary conditions, matching `PoissonSolver._apply_operator`. The three buffers must not overlap.
 - `solve_conjugate_gradient` accepts an operator callback and a dot-product callback. `b` is the right-hand side and `x` is the initial guess, which receives the solution; they have equal lengths and must not overlap. The callbacks must preserve their input values. The operator callback overwrites its equally sized output buffer and must be symmetric and positive definite on the subspace being solved. The stopping threshold is `rtol * sqrt(dot(b, b))`, with a positive finite tolerance `rtol` and a positive iteration limit `maxiter`; a zero `b` produces a zero solution. Failure to converge raises `std::runtime_error`. The caller handles pressure right-hand-side adjustments and mean removal, as the Python solver does.
 
-These are implementation contracts; the placeholders do not yet validate inputs or perform numerical work. Boundary conditions and MPI communication stay with the caller through the callbacks. Python bindings and numerical agreement tests are added as each kernel is implemented.
+These are implementation contracts; the placeholders do not yet validate inputs or perform numerical work. Boundary conditions and MPI communication stay with the caller through the callbacks. Numerical agreement tests are added as each kernel is implemented.
 
 ## Build
 
@@ -79,15 +78,15 @@ An edit under `src/` still takes effect on the next run. An edit under `cpp/` ha
 
 ## Test
 
-The kernel library uses [GoogleTest](https://google.github.io/googletest/) and runs with no Python. `cpp/tests/test_ndarray.cpp` checks multidimensional storage, indexing, ownership, and invalid shapes. `cpp/tests/test_kernels.cpp` is an empty placeholder for the numerical kernels. CMake discovers tests automatically after they are added. Building the test executable needs CMake 3.20 or newer and Git on PATH, and network access the first time, to fetch GoogleTest v1.18.0:
+The C++ tests use [GoogleTest](https://google.github.io/googletest/). A C++ test that calls a kernel needs a running Python interpreter with numpy, through pybind11's `embed.h`, because the kernel arguments are numpy arrays. `cpp/tests/test_ndarray.cpp` checks multidimensional storage, indexing, ownership, and invalid shapes. `cpp/tests/test_kernels.cpp` is an empty placeholder for the numerical kernels. CMake discovers tests automatically after they are added. Building the test executable needs CMake 3.20 or newer and Git on PATH, network access the first time to fetch GoogleTest v1.18.0, and the uv environment, which supplies pybind11 and the Python headers:
 
 ```bash
-cmake -S . -B build/cpp -DEXAFLOW_BUILD_PYTHON=OFF -DEXAFLOW_BUILD_TESTS=ON
+cmake -S . -B build/cpp -DEXAFLOW_BUILD_PYTHON=OFF -DEXAFLOW_BUILD_TESTS=ON -Dpybind11_DIR="$(uv run python -m pybind11 --cmakedir)" -DPython_EXECUTABLE="$(uv run python -c 'import sys; print(sys.executable)')"
 cmake --build build/cpp --config Release
 ctest --test-dir build/cpp -C Release --output-on-failure
 ```
 
-The same three lines work in PowerShell. `tests/test_kernels.py` is also an empty placeholder. After adding Python tests for the extension, run:
+The same three lines work in PowerShell. `tests/test_kernels.py` tests `NDArray` and the elementwise kernels from Python, and checks that the placeholder kernels accept their arguments. Run it with:
 
 ```bash
 uv run pytest tests/test_kernels.py
