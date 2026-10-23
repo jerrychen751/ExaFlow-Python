@@ -11,8 +11,6 @@ namespace exaflow {
 // Checks whether Python object is a numpy array, float64 type, and in row-major order
 using NPArray = pybind11::array_t<double, pybind11::array::c_style>;
 
-double add(double a, double b);
-
 double compute_dot(const NPArray& a, const NPArray& b);
 
 void add_elements(const NPArray& x1, const NPArray& x2, NPArray& out);

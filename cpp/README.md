@@ -1,6 +1,6 @@
 # C++ extension
 
-The C++ extension scaffold imports as `exaflow._kernels`. It exposes the scalar `add_c` example, the `NDArray` class and every team kernel, and nothing in the solver calls them yet. The kernels take float64, C-contiguous numpy arrays and write into the caller's output array in place, with no copy. Python can also allocate an array with `NDArray(shape)`, and `np.asarray` on it returns a numpy view of the same storage with no copy. The team kernels have C++ interfaces and implementation placeholders; calling a placeholder throws `std::logic_error` until its numerical implementation is written.
+The C++ extension scaffold imports as `exaflow._kernels`. It exposes the `NDArray` class and every team kernel, and nothing in the solver calls them yet. The kernels take float64, C-contiguous numpy arrays and write into the caller's output array in place, with no copy. Python can also allocate an array with `NDArray(shape)`, and `np.asarray` on it returns a numpy view of the same storage with no copy. The team kernels have C++ interfaces and implementation placeholders; calling a placeholder throws `std::logic_error` until its numerical implementation is written.
 
 ## Layout
 
