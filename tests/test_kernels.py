@@ -111,9 +111,6 @@ def test_placeholder_kernels_accept_numpy_arguments() -> None:
     padded = np.zeros((6, 6))
     out = np.zeros((4, 4))
 
-    with pytest.raises(RuntimeError, match="apply_laplacian is not implemented"):
-        _kernels.apply_laplacian(padded, out, [0.1, 0.1], 1)
-
     with pytest.raises(RuntimeError, match="apply_operator is not implemented"):
         _kernels.apply_operator(np.zeros((4, 4)), out, padded, [0.1, 0.1], 1, lambda array: None)
 
