@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from .. import _kernels
 from ..boundary_application import select_ghost_and_mirror
 from ..config.boundaries import collect_faces
 from ..config.boundary_conditions import BoundaryCondition
@@ -50,7 +51,7 @@ class PoissonSolver:
         self._subdomain = subdomain
         self._comm = comm
         self._spacing = case.grid.spacing
-        self._inverse_square = tuple(1.0 / (step * step) for step in case.grid.spacing)
+        self._num_ghost_layers = case.grid.num_ghost_layers
         self._interior = subdomain.interior
         self._lower = tuple(subdomain.shift_interior(axis, -1) for axis in range(case.dimension))
         self._upper = tuple(subdomain.shift_interior(axis, +1) for axis in range(case.dimension))
@@ -74,22 +75,13 @@ class PoissonSolver:
         )
 
         self._padded = np.zeros(subdomain.padded_shape, dtype=float)
-        self._scratch = np.empty(subdomain.shape, dtype=float)
         self._previous: np.ndarray | None = None
 
     # The discrete Laplacian operator ∇²p = ∂²p/∂x² + ∂²p/∂y² + ∂²p/∂z²
     # Approximated via central differences: ∂²p/∂x² ≈ (p[i+1] - 2p[i] + p[i-1]) / dx²
     def _apply_laplacian(self, padded: np.ndarray, out: np.ndarray, *, homogeneous: bool) -> None:
         self._fill_ghost_layers(padded, homogeneous=homogeneous)
-        middle = padded[self._interior]
-        scratch = self._scratch
-        out.fill(0.0)
-        for axis in range(self.dimension):
-            np.add(padded[self._upper[axis]], padded[self._lower[axis]], out=scratch)
-            scratch -= middle
-            scratch -= middle
-            scratch *= self._inverse_square[axis]
-            out += scratch
+        _kernels.apply_laplacian(padded, out, self._spacing, self._num_ghost_layers)
 
     def _fill_ghost_layers(self, padded: np.ndarray, *, homogeneous: bool) -> None:
         self._exchange.start_arrays((padded,))
