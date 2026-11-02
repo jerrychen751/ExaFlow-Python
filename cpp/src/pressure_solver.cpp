@@ -96,7 +96,39 @@ void apply_operator(
     std::size_t ghost_layers,
     const std::function<void(NPArray&)>& fill_ghost_layers
 ) {
-    throw std::logic_error("apply_operator is not implemented");
+    const std::ptrdiff_t dim = static_cast<std::ptrdiff_t>(out.ndim());
+
+    const std::ptrdiff_t g = static_cast<std::ptrdiff_t>(ghost_layers);
+    const double* xd = x.data();
+    double* pd = padded.mutable_data();
+
+    if (dim == 1) {
+        const std::ptrdiff_t n0 = out.shape(0);
+        for (std::ptrdiff_t i = 0; i < n0; ++i)
+            pd[i + g] = xd[i];
+
+    } else if (dim == 2) {
+        const std::ptrdiff_t n0 = out.shape(0), n1 = out.shape(1);
+        const std::ptrdiff_t s0 = padded.shape(1);
+        for (std::ptrdiff_t i = 0; i < n0; ++i)
+            for (std::ptrdiff_t j = 0; j < n1; ++j)
+                pd[(i + g) * s0 + (j + g)] = xd[i * n1 + j];
+
+    } else {
+        const std::ptrdiff_t n0 = out.shape(0), n1 = out.shape(1), n2 = out.shape(2);
+        const std::ptrdiff_t s1 = padded.shape(2);
+        const std::ptrdiff_t s0 = padded.shape(1) * padded.shape(2);
+        for (std::ptrdiff_t i = 0; i < n0; ++i)
+            for (std::ptrdiff_t j = 0; j < n1; ++j)
+                for (std::ptrdiff_t k = 0; k < n2; ++k)
+                    pd[(i + g) * s0 + (j + g) * s1 + (k + g)] = xd[(i * n1 + j) * n2 + k];
+    }
+
+    fill_ghost_layers(padded);
+
+    apply_laplacian(padded, out, spacing, ghost_layers);
+
+    multiply_elements(out, -1.0, out);
 }
 
 void solve_conjugate_gradient(
